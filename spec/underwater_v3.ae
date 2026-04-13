@@ -1,0 +1,85 @@
+# v0.3
+
+# This is an example of the aetherus-events Domain-Specific Language (DSL)
+# used to easilty define patterns and sequences of interested,
+# in order to classify and analyse the photon histories in a MCRT simulation.
+
+
+# Define material and surface identifiers we want to match for
+# ============================================================
+
+src water_id = any[Mat("seawater"), Mat("Water:Water_material")]
+src glass_id = any[MatSurf("Tank-Water:Tank_material"), MatSurf("Tank:Tank_material"), MatSurf(65534), MatSurf(0xFFFE)]
+src toy_id   = Surf("TargetToy")
+src tube_id  = Surf("TargetTube")
+src air_id   = Mat("Air")
+
+field scatter_elastic  = Material | Elastic                 | X
+field scatter_elastic2 = Material | Elastic                 | any[Forward, Side]
+field scatter_elastic3 = Material | any[Elastic, Inelastic] | any[Forward, Side]
+field scatter_elastic4 = any[
+                              Material | Elastic | Forward,
+                              Material | Elastic | Side,
+                            ]
+
+
+# Define encoding patterns to match for
+# =====================================
+
+pattern water_scatter     = MCRT | Material  | Elastic | X       | water_id
+pattern water_backscatter = MCRT | Material  | Elastic | Forward | water_id
+pattern glass_interf      = MCRT | Interface | X                 | glass_id
+
+pattern toy_surf          = MCRT | Reflector | X                 | toy_id
+pattern tube_surf         = MCRT | Surface   | X                 | tube_id
+
+
+# Define sequences of events in the photon history to search for
+# ==============================================================
+
+sequence toy_detect = [
+  Emission | X | LighId(0),
+  * X,
+  toy_surf,
+  * X,
+  Detection | X | DetId(0),
+]
+
+sequence tube_detect = [
+  Emission | X | LighId(0),
+  * X,
+  tube_surf,
+  * X,
+  Detection | X | DetId(0),
+]
+
+sequence water_backscatter = [
+  Emission | X | LighId(0),
+  * X,
+  water_scatter,
+  * X,
+  Detection | X | DetId(0),
+]
+
+# Note how rule tries to validate all conditions enumerated
+rule backscatter = {
+  ! any[tube_surf, toy_surf],
+  seq[
+    Emission | X | LighId(0),
+    * X,
+    water_scatter,
+    * X,
+    Detection | X | DetId(0),
+  ],
+  water_backscatter, # equivalent to the inline expression above
+}
+
+rule glass_detect = {
+  seq[
+    Emission | X | LighId(0),
+    * X,
+    glass_interf,
+    * X,
+    Detection | X | DetId(0),
+  ]
+}

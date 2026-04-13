@@ -1,0 +1,63 @@
+program = _{ SOI ~ statement* ~ EOI }
+statement = _{ field | pattern | seq | comment }
+comment = _{ "#" ~ (!"\n" ~ ANY)* }
+
+field = { "field" ~ ident ~ ":" field_body}
+pattern = { "pattern" ~ ident ~ ":" pattern_body}
+seq = { "seq" ~ ident ~ ":" seq_body}
+
+src_gen_field = _{ src_field | "any[" ~ src_field_list ~ "]" }
+src_field_list = { src_field ~ ("," ~ src_field)* }
+src_field = { src_ident ~ "(" ~ ("\"" ~ src_name ~ "\"" | src_id) ~ ")" }
+src_name = { !("\"" | NEWLINE) ~ ANY* }
+src_id = { ASCII_DIGIT+ | src_id_hex }
+src_id_hex = _{ "0x" ~ ASCII_HEX_DIGIT{4} }
+src_ident = { "Mat" | "Surf" | "MatSurf" | "Light" | "Detector" }
+
+pattern_body = { "|" ~ pipeline_id ~ "|" ~ pattern_token ~ "|" ~ (src_gen_field | ident) }
+
+pipeline_id   = { "MCRT" | "Emission" | "Detection" }
+pattern_token = { event_gen_field | "*" | ident }
+
+field_body = { src_gen_field | event_gen_field }
+event_gen_field = _{ event_field | "any[" ~ event_field_list ~ "]" }
+event_field_list = { event_field ~ ("|" ~ event_field)* }
+event_field = {
+  "Material" | "Interface" | "Reflector" |
+  "Elastic" | "Inelastic" |
+  "Mie" | "Rayleigh" | "Henyey-Greenstein" |
+  "Forward" | "Backward" | "Side" | "Any" |
+  "Refraction" | "Reflection" | "ReEmission" |
+  "Diffuse" | "Specular" | "Composite"
+}
+
+/// Sequence body consists of multiple pattern lines, each line can optionally start with a match type and end with a newline followed by another pattern line
+/// Example:
+/// ```
+/// sequence backscatter:
+///   global {
+///     # Check that there is at least one material interaction overall
+///     | MCRT | Material | * | MatSurf(0) |
+///   }
+///   | Emission | * | LighId(0) |
+///   ! any[tube_surf, toy_surf]
+///   water_scatter
+///   ! any[tube_surf, toy_surf]
+///   | Detection | * | DetId(0) |
+/// ```
+seq_body = {
+  ("" | match_type) ~ (pattern_body | ident) ~ (NEWLINE ~ seq_body)?
+}
+
+/// Pattern type to be used in the sequence matching
+/// - `!` - Negation: the pattern must not match
+/// - `?` - Optional: the pattern may match zero or one time
+/// - `*` - Zero or more: the pattern may match zero or more times
+/// - `+` - One or more: the pattern must match one or more times
+/// - `{n,m}` - Range: the pattern must match at least n times and at most m times
+/// - `G` - Global check that the pattern matches anywhere in the sequence, not just at the current position
+// TODO: Implement range repetition
+match_type = {"!" | "?" | "*" | "+" | "{n,m}" | "G" }
+
+WHITESPACE = _{ " " | "\t" | "\r" | "\n" }
+SEPARATOR = _{ "," }

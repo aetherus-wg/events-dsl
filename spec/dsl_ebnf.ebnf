@@ -1,0 +1,47 @@
+program        = statement , { NEWLINE , statement } ;
+
+statement      = field_decl | pattern_decl | seq_decl | comment ;
+
+comment        = "#" , ( digit_nonzero | lowercase_letter ) , { digit_nonzero | lowercase_letter } ;
+
+field_decl     = "field" , WHITESPACE , ident , ":" , { WHITESPACE } , field_gen_ident ;
+pattern_decl   = "pattern" , WHITESPACE , ident , ":" , { WHITESPACE } , pattern_body ;
+seq_decl       = "sequence" , WHITESPACE , ident , ":" , { WHITESPACE } , [ NEWLINE ] , seq_body ;
+
+src_gen_field  = src_field | "Any[" , { WHITESPACE } , src_field_list , { WHITESPACE } , "]" ;
+src_field_list = src_field , { SEPARATOR , src_field } ;
+src_field      = src_ident , "(" , ( "\"" , src_name , "\"" | src_id ) , ")" ;
+src_name       = LETTER , { LETTER | DIGIT | "_" } ;
+src_id         = digit_nonzero , { DIGIT } | src_id_hex ;
+src_id_hex     = "0x" , HEX_DIGIT , HEX_DIGIT , HEX_DIGIT , HEX_DIGIT ;
+src_ident      = "Mat" | "Surf" | "MatSurf" | "Light" | "Detector" ;
+
+pattern_body   = "|" , { WHITESPACE } , pipeline_id , CONCAT , pattern_event , CONCAT , src_field , { WHITESPACE } , "|" ;
+pipeline_id    = "MCRT" | "Emission" | "Detection" ;
+pattern_event  = pattern_token , { CONCAT , pattern_token } ;
+pattern_token  = field_gen_ident | "*" | ident ;
+
+field_gen_ident  = field_ident | "Any[" , { WHITESPACE } , field_ident_list , { WHITESPACE } , "]" ;
+field_ident_list = field_ident , { SEPARATOR , field_ident } ;
+field_ident      = "Material" | "Interface" | "Reflector" | "Refraction" | "Reflection"
+                  | "Elastic" | "Inelastic" | field_refl_ident | field_scat_ident | field_dir_ident ;
+field_dir_ident  = "Dir::Forward" | "Dir::Backward" | "Dir::Side" | "Dir::Any" ;
+field_refl_ident = "Diffuse" | "Specular" | "Composite" ;
+field_scat_ident = "Mie" | "Rayleigh" | "Henyey-Greenstein" ;
+
+seq_body       = SEQ_TYPE , ( pattern_body | ident ), [ NEWLINE , seq_body ] ;
+
+SEQ_TYPE       = "E" | "!" | ( digit_nonzero , { DIGIT } ) | "N" ;
+ident          = LETTER , { LETTER | DIGIT | "_" } ;
+LETTER         = lowercase_letter | uppercase_letter ;
+DIGIT          = "0" | digit_nonzero ;
+digit_nonzero  = "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" ;
+lowercase_letter = "a" | "b" | "c" | "d" | "e" | "f" | "g" | "h" | "i" | "j" | "k" | "l" | "m"
+                 | "n" | "o" | "p" | "q" | "r" | "s" | "t" | "u" | "v" | "w" | "x" | "y" | "z" ;
+uppercase_letter = "A" | "B" | "C" | "D" | "E" | "F" | "G" | "H" | "I" | "J" | "K" | "L" | "M"
+                 | "N" | "O" | "P" | "Q" | "R" | "S" | "T" | "U" | "V" | "W" | "X" | "Y" | "Z" ;
+WHITESPACE     = " " ;
+NEWLINE        = "\n" | "\r\n" ;
+HEX_DIGIT      = DIGIT | "a" | "b" | "c" | "d" | "e" | "f" | "A" | "B" | "C" | "D" | "E" | "F" ;
+CONCAT         = { WHITESPACE } , "|" , { WHITESPACE } ;
+SEPARATOR      = { WHITESPACE } , "," , { WHITESPACE } ;
