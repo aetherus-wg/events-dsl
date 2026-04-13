@@ -122,6 +122,8 @@ pub fn search_trie(trie_node: &TrieNode, pattern: &Pattern, attrs_map: &HashMap<
         let mut check_prev_x = true;
 
         for (child_field, child_node) in &entry.node.children {
+            // FIXME If pattern_field=X and node.children.contains(X), match Xs together and ignore
+            // other children
             match (pattern_field, child_field, entry.prev_trie_x) {
                 (Field::Field(name), trie::Field::Named { name: child_name, .. }, _) => {
                     if name == child_name {
@@ -142,8 +144,10 @@ pub fn search_trie(trie_node: &TrieNode, pattern: &Pattern, attrs_map: &HashMap<
                     stack.push(entry.step_trie(&child_field, &child_node).step_pattern());
                 }
                 (Field::X, trie::Field::Named { .. }, _) => {
-                    stack.push(entry.step_trie(&child_field, &child_node));
-                    stack.push(entry.step_trie(&child_field, &child_node).step_pattern());
+                    // NOTE: Avoid the need to find min products sum, and don't allow Pattern::X to
+                    // consume named fields from the Trie
+                    // stack.push(entry.step_trie(&child_field, &child_node));
+                    // stack.push(entry.step_trie(&child_field, &child_node).step_pattern());
                 }
                 (Field::X, trie::Field::X { .. }, _prev_x) => {
                     stack.push(entry.step_trie(&child_field, &child_node));
