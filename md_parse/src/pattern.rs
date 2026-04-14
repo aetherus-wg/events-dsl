@@ -1,35 +1,43 @@
 use std::collections::{HashMap, HashSet};
 
-use log::error;
+use log::{debug, error, info, trace};
 
-use crate::{bits::BitsMatch, trie::{self, TrieNode}};
+use crate::{SrcId, bits::BitsMatch, trie::{self, TrieNode}};
 
 #[derive(Debug)]
 pub enum Field<'a> {
     X,
+    SrcId(SrcId),
     Field(&'a str),
 }
 
 #[derive(Debug)]
 pub struct Pattern<'a>(pub Vec<Field<'a>>);
 
-pub fn field_matches(pattern_field: &Field, trie_field: &trie::Field, attrs_map: &HashMap<String, Vec<String>>) -> bool {
-    //println!("Matching pattern field {:?} with trie field {:?}", pattern_field, trie_field);
-    match (pattern_field, trie_field) {
-        (Field::X, _) => true, // 'X' matches any field
-        (_, trie::Field::X { .. }) => true, // Specific field can match 'X' in trie
-        (Field::Field(name), trie::Field::Named { name: trie_name, attr, .. }) => {
-            if let Some(attr) = attr {
-                attrs_map.get(attr)
-                    .is_some_and(|values| values.contains(&name.to_string()))
-            } else {
-                name == trie_name
-            }
-        },
-    }
+fn combine_src_id(lhs: &SrcId, rhs: &SrcId) -> Option<SrcId> {
+    let strict_type = match (lhs, rhs) {
+        (SrcId::SrcId,      SrcId::MatSurfId)  => SrcId::MatSurfId,
+        (SrcId::SrcId,      SrcId::MatId)      => SrcId::MatId,
+        (SrcId::SrcId,      SrcId::SurfId)     => SrcId::MatId,
+        (SrcId::SrcId,      SrcId::LightId)    => SrcId::LightId,
+        (SrcId::SrcId,      SrcId::DetectorId) => SrcId::DetectorId,
+        (SrcId::MatSurfId,  SrcId::MatId)      => SrcId::MatId,
+        (SrcId::MatSurfId,  SrcId::SurfId)     => SrcId::SurfId,
+        // The same but in reverse
+        (SrcId::MatSurfId,  SrcId::SrcId)      => SrcId::MatSurfId,
+        (SrcId::MatId,      SrcId::SrcId)      => SrcId::MatId,
+        (SrcId::SurfId,     SrcId::SrcId)      => SrcId::MatId,
+        (SrcId::LightId,    SrcId::SrcId)      => SrcId::LightId,
+        (SrcId::DetectorId, SrcId::SrcId)      => SrcId::DetectorId,
+        (SrcId::MatId,      SrcId::MatSurfId)  => SrcId::MatId,
+        (SrcId::SurfId,     SrcId::MatSurfId)  => SrcId::SurfId,
+        (req, enc) if req == enc => req.clone(),
+        _ => return None,
+    };
+    Some(strict_type)
 }
 
-pub fn search_trie(trie_node: &TrieNode, pattern: &Pattern, attrs_map: &HashMap<String, Vec<String>>) -> BitsMatch {
+pub fn search_trie(trie_node: &TrieNode, pattern: &Pattern, attrs_map: &HashMap<String, Vec<String>>) -> (BitsMatch, SrcId) {
     let mut encodings = Vec::new();
     // FIXME: bits_match must hold bits range and attribute
     struct TrieField<'a> {
@@ -43,6 +51,7 @@ pub fn search_trie(trie_node: &TrieNode, pattern: &Pattern, attrs_map: &HashMap<
         prev_trie_x: bool,
         bits_match: BitsMatch,
         encoding: Vec<String>,
+        src_id: SrcId,
     }
     impl<'a> StackEntry<'a> {
         pub fn step_pattern(&self) -> StackEntry<'a> {
@@ -52,6 +61,7 @@ pub fn search_trie(trie_node: &TrieNode, pattern: &Pattern, attrs_map: &HashMap<
                 prev_trie_x: self.prev_trie_x,
                 bits_match: self.bits_match.clone(),
                 encoding: self.encoding.clone(),
+                src_id: self.src_id.clone(),
             }
         }
         pub fn step_trie(&self, child_field: &trie::Field, child_node: &'a trie::TrieNode) -> StackEntry<'a> {
@@ -62,10 +72,16 @@ pub fn search_trie(trie_node: &TrieNode, pattern: &Pattern, attrs_map: &HashMap<
                 bits_match: self.bits_match.combine(child_field.bits_match()),
                 encoding: {
                     let mut encoding = self.encoding.clone();
-                    encoding.push(format!("{:?} ", child_field));
+                    encoding.push(child_field.to_string());
                     encoding
                 },
+                src_id: self.src_id.clone(),
             }
+        }
+        pub fn with_src_id(&self, src_id: SrcId) -> StackEntry<'a> {
+            let mut entry = self.clone();
+            entry.src_id = src_id;
+            entry
         }
     }
     struct Stack<'a> {
@@ -104,12 +120,14 @@ pub fn search_trie(trie_node: &TrieNode, pattern: &Pattern, attrs_map: &HashMap<
         bits_match: BitsMatch { mask: 0, value: 0 },
         // Encodings extracted from the Trie
         encoding: Vec::new(),
+        // SrcId, last field in encoding
+        src_id: SrcId::SrcId,
     });
 
     while let Some(entry) = stack.pop() {
         if entry.pattern_index == pattern.0.len() && entry.node.is_terminal {
-            println!("Found match with encoding: {:#?}", entry.encoding);
-            encodings.push(entry.bits_match);
+            debug!("Found match with encoding: {:#?}", entry.encoding);
+            encodings.push((entry.bits_match, entry.src_id));
             continue;
         } else if entry.pattern_index >= pattern.0.len() || entry.node.is_terminal {
             // Pattern is fully matched but trie path is not terminal,
@@ -124,14 +142,33 @@ pub fn search_trie(trie_node: &TrieNode, pattern: &Pattern, attrs_map: &HashMap<
         for (child_field, child_node) in &entry.node.children {
             // FIXME If pattern_field=X and node.children.contains(X), match Xs together and ignore
             // other children
-            match (pattern_field, child_field, entry.prev_trie_x) {
-                (Field::Field(name), trie::Field::Named { name: child_name, .. }, _) => {
+            match (pattern_field, child_field) {
+                (Field::SrcId(req_type), trie::Field::SrcId(enc_type)) => {
+                    assert!(child_node.is_terminal);
+                    let strict_type = match combine_src_id(req_type, enc_type) {
+                        Some(strict_type) => strict_type,
+                        None => {
+                            trace!(
+                                "Failed to combine SrcId types: ({}, {})",
+                                req_type, enc_type
+                            );
+                            continue;
+                        }
+                    };
+
+                    let mut new_entry = entry.step_trie(&child_field, &child_node).step_pattern();
+                    if let Some(last) = new_entry.encoding.last_mut() {
+                        *last = strict_type.to_string();
+                    }
+                    stack.push(new_entry.with_src_id(strict_type));
+                }
+                (Field::Field(name), trie::Field::Named { name: child_name, .. }) => {
                     if name == child_name {
                         stack.push(entry.step_trie(&child_field, &child_node).step_pattern());
                         check_prev_x = false; // Match implies barrier on the X in the Trie
                     }
                 }
-                (Field::Field(name), trie::Field::X { attr: Some(attr), .. }, _) => {
+                (Field::Field(name), trie::Field::X { attr: Some(attr), .. }) => {
                     if attrs_map
                         .get(attr)
                         .is_some_and(|values| values.contains(&name.to_string()))
@@ -140,19 +177,27 @@ pub fn search_trie(trie_node: &TrieNode, pattern: &Pattern, attrs_map: &HashMap<
                         check_prev_x = false; // Match implies barrier on the X in the Trie
                     }
                 }
-                (Field::Field(_name), trie::Field::X { .. }, _prev_x) => {
+                (Field::Field(_name), trie::Field::X { .. }) => {
                     stack.push(entry.step_trie(&child_field, &child_node).step_pattern());
                 }
-                (Field::X, trie::Field::Named { .. }, _) => {
+                (Field::X, trie::Field::Named { .. }) => {
                     // NOTE: Avoid the need to find min products sum, and don't allow Pattern::X to
                     // consume named fields from the Trie
                     // stack.push(entry.step_trie(&child_field, &child_node));
                     // stack.push(entry.step_trie(&child_field, &child_node).step_pattern());
                 }
-                (Field::X, trie::Field::X { .. }, _prev_x) => {
+                (Field::X, trie::Field::X { .. }) => {
                     stack.push(entry.step_trie(&child_field, &child_node));
                     stack.push(entry.step_trie(&child_field, &child_node).step_pattern());
                 }
+                (Field::X, trie::Field::SrcId(src_id)) => {
+                    // End of trie, so advancing only pattern is certainly going to be dropped
+                    assert!(child_node.is_terminal);
+                    stack.push(entry.step_trie(&child_field, &child_node).step_pattern().with_src_id(src_id.clone()));
+                }
+                (Field::Field(_), trie::Field::SrcId(_)) => { }
+                (Field::SrcId(_), trie::Field::X{..}) => { }
+                (Field::SrcId(_), trie::Field::Named{..}) => { }
             }
         }
 
@@ -163,8 +208,26 @@ pub fn search_trie(trie_node: &TrieNode, pattern: &Pattern, attrs_map: &HashMap<
         }
     }
 
-    println!("Found {} encodings matching pattern: {:#?}", encodings.len(), encodings);
+    if encodings.is_empty() {
+        panic!("No encodings found matching pattern: {:?}", pattern);
+    }
+    debug!("Found {} encodings matching pattern: {:?}", encodings.len(), encodings);
+
     // Combine all encodings into one BitsMatch with mask covering all bits and value being the OR of all values
     // FIXME: Replace with combination instead of retruning first match
-    encodings[0].clone()
+    let bits_match = encodings.iter().fold(BitsMatch { mask: 0, value: 0 }, |acc, enc| acc.combine(&enc.0));
+
+    let src_id = encodings.iter().fold(SrcId::SrcId, |acc, enc| {
+        match combine_src_id(&acc, &enc.1) {
+            Some(strict_type) => strict_type,
+            None => {
+                panic!(
+                    "Failed to combine SrcId types: ({}, {})",
+                    acc, enc.1
+                );
+            }
+        }
+    });
+
+    (bits_match, src_id)
 }

@@ -4,6 +4,7 @@ use markdown_ppp::ast::Block;
 use markdown_ppp::ast::{Document, Inline};
 use markdown_ppp::parser::MarkdownParserState;
 use markdown_ppp::parser::parse_markdown;
+use md_parse::SrcId;
 use md_parse::bits::{BitsRange, BitsMatch};
 use md_parse::trie::{Encoding, Field, Trie};
 use md_parse::pattern::{self, Pattern};
@@ -37,15 +38,15 @@ fn parse_encodings(src: &str) -> Result<Vec<Encoding>> {
                 .collect::<Result<Vec<_>, _>>()?; // header row
 
             for (fields_md, encodings_md) in table.rows.iter().skip(1).tuples() {
-                let mut unspecified = false;
-                let mut fields_encodings = Vec::new();
+                let mut specified = true;
+                let mut fields_encoding = Vec::new();
                 for (bit_range, (field_md, encoding_md)) in
                     bits_ranges.iter().zip(fields_md.iter().zip(encodings_md.iter()))
                 {
                     let field_str = unwrap_inline(&field_md[0])?;
                     let encoding = BitsMatch::parse(&bit_range, &unwrap_inline(&encoding_md[0])?);
                     if field_str.starts_with('_') && field_str.len() > 1 {
-                        unspecified = true;
+                        specified = false;
                     }
 
                     // TODO: Regex parse to extract name and optional attr from
@@ -54,7 +55,10 @@ fn parse_encodings(src: &str) -> Result<Vec<Encoding>> {
                     let field = if let Some(caps) = re.captures(&field_str) {
                         let name = caps.get(1).unwrap().as_str().to_string();
                         let attr = caps.get(2).map(|m| m.as_str().to_string());
-                        if name == "_" || name == "" || name == "X" {
+                        if attr == Some("SrcId".to_string()) {
+                            Field::from_str(name.as_str())?
+                        }
+                        else if name == "_" || name == "" || name == "X" {
                             Field::X{size: bit_range.size(), attr}
                         } else {
                             Field::Named {
@@ -67,10 +71,10 @@ fn parse_encodings(src: &str) -> Result<Vec<Encoding>> {
                     } else {
                         panic!("Invalid field name format: {}", field_str);
                     };
-                    fields_encodings.push(field);
+                    fields_encoding.push(field);
                 }
-                if !unspecified {
-                    encodings.push(Encoding(fields_encodings));
+                if specified {
+                    encodings.push(Encoding(fields_encoding));
                 }
             }
         }
@@ -105,7 +109,8 @@ fn main() -> Result<()> {
         pattern::Field::Field("Elastic"),
         pattern::Field::X,
         pattern::Field::Field("Forward"),
-        pattern::Field::Field("MatId")
+        //pattern::Field::X,
+        pattern::Field::SrcId(SrcId::MatId),
     ]);
 
     let attrs_map = HashMap::from([
@@ -119,9 +124,9 @@ fn main() -> Result<()> {
         ),
     ]);
 
-    let bits_match = pattern::search_trie(&trie.root, &pattern, &attrs_map);
+    let (bits_match, src_id) = pattern::search_trie(&trie.root, &pattern, &attrs_map);
 
-    println!("Bits match for pattern {:?}: {:?}", pattern, bits_match);
+    println!("Bits match for pattern {:?}: {:?} with {}", pattern, bits_match, src_id);
 
     Ok(())
 }

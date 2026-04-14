@@ -1,4 +1,6 @@
-use crate::bits::BitsMatch;
+use crate::{SrcId, bits::BitsMatch};
+use std::str::FromStr;
+use anyhow::{anyhow, Error};
 
 #[derive(Debug, Clone, Hash)]
 pub enum Field {
@@ -6,6 +8,7 @@ pub enum Field {
         attr: Option<String>,
         size: usize
     },
+    SrcId(SrcId),
     Named {
         name: String,
         attr: Option<String>,
@@ -17,8 +20,27 @@ pub enum Field {
 impl Field {
     pub fn bits_match(&self) -> &BitsMatch {
         match self {
-            Field::X { .. } => &BitsMatch { mask: 0, value: 0 },
+            Field::X { .. }           => &BitsMatch { mask: 0, value: 0 },
+            Field::SrcId(_)           => &BitsMatch { mask: 0, value: 0 },
             Field::Named { bits, .. } => bits,
+        }
+    }
+    pub fn size(&self) -> usize {
+        match self {
+            Field::X { size, .. }     => *size,
+            Field::SrcId(_)           => 16,
+            Field::Named { size, .. } => *size,
+        }
+    }
+}
+
+impl FromStr for Field {
+    type Err = Error;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if let Ok(src_id) = SrcId::from_str(s) {
+            Ok(Field::SrcId(src_id))
+        } else {
+            Err(anyhow!("Unknown field type: {}", s))
         }
     }
 }
@@ -26,10 +48,11 @@ impl Field {
 impl std::fmt::Display for Field {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Field::X{size, attr: Some(attr)} => write!(f, "X({size} bits)\n{{{attr}}}"),
-            Field::X{size, ..} => write!(f, "X({size} bits)"),
+            Field::X{size, attr: Some(attr)}            => write!(f, "X({size} bits)\n{{{attr}}}"),
+            Field::X{size, ..}                          => write!(f, "X({size} bits)"),
+            Field::SrcId(src_id)                        => write!(f, "{src_id}"),
             Field::Named { name, attr: Some(attr), .. } => write!(f, "{attr}::{name}"),
-            Field::Named { name, .. } => write!(f, "{}", name),
+            Field::Named { name, .. }                   => write!(f, "{}", name),
         }
     }
 }
@@ -59,6 +82,7 @@ impl PartialEq for Field {
                 );
                 name1 == name2
             }
+            (Field::SrcId(src_id1), Field::SrcId(src_id2)) => src_id1 == src_id2,
             _ => false,
         }
     }

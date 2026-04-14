@@ -81,7 +81,7 @@ impl BitsMatch {
     }
 
     pub fn combine(&self, other: &BitsMatch) -> BitsMatch {
-        assert!(self.mask & other.mask == 0, "Cannot combine BitsMatch with overlapping masks");
+        assert!(self.mask & other.mask == 0 || (self.mask & other.mask & self.value) == (self.mask & other.mask & other.value), "Cannot combine BitsMatch with ambiguous values in overlapping masks");
         BitsMatch {
             mask: self.mask | other.mask,
             value: (self.mask & self.value) | (other.mask & other.value),
