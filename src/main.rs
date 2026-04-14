@@ -18,16 +18,14 @@ pub enum Token<'src> {
     Ctrl(char), // '=', '[', ']', ',' , '{', '}'
     Predicates(char), // '*', '+', '?', ! = 0+, 1+, {0,1}, 0
     Concat,     // '|' Concatenation operator
-    // 'X' -Matches any event field or pattern
-    DontCare,
+    // 'X'=DontCare -Matches any event field or pattern
+    X,
     // "any[" ... "]" matches any field/pattern with the specified values
     Any,
     // "perm[" ... "]" matches patterns in any permutation/order
     Perm,
     // - "seq[ ... ]" inline sequence
     Seq,
-    // "field <field_ident> = <expr>"
-    FieldDecl,
     // "src <src_ident> = <expr>"
     SrcDecl,
     // "pattern <pattern_ident> = <expr>"
@@ -38,12 +36,11 @@ pub enum Token<'src> {
     RuleDecl,
     // Identifiers for src ids, fields, patterns and sequences
     Ident(&'src str),
-    // MCRT, Emission, Detection
-    PipelineId(&'src str),
-    // Material, Interface, Elastic, etc. => Must define a dictionary of Event names that are
+    // MCRT, Emission, Detection,
+    // Material, Interface, Elastic, etc. => Must define a dictionary of Field names that are
     // reserved
-    EventId(&'src str),
-    // "match for "Mat", "MatSurf", "Surf", "LightId", "DetectorId": <SrcIdName>("<name>") or
+    FieldId(&'src str),
+    // "match for "MatId", "MatSurfId", "SurfId", "LightId", "DetectorId": <SrcIdName>("<name>") or
     // <SrcIdName>(<value>) where value can be hex/dec
     SrcId(&'src str),
     Str(&'src str),
@@ -56,18 +53,16 @@ impl fmt::Display for Token<'_> {
             Token::Ctrl(c)       => write!(f, "{c}"     ),
             Token::Predicates(c) => write!(f, "{c}"     ),
             Token::Concat        => write!(f, "|"       ),
-            Token::DontCare      => write!(f, "X"       ),
+            Token::X      => write!(f, "X"       ),
             Token::Any           => write!(f, "any"     ),
             Token::Perm          => write!(f, "perm"    ),
             Token::Seq           => write!(f, "seq"     ),
             Token::SrcDecl       => write!(f, "src"     ),
-            Token::FieldDecl     => write!(f, "field"   ),
             Token::PatternDecl   => write!(f, "pattern" ),
             Token::SeqDecl       => write!(f, "sequence"),
             Token::RuleDecl          => write!(f, "rule"    ),
             Token::Ident(s)      => write!(f, "{s}"     ),
-            Token::PipelineId(s) => write!(f, "{s}"     ),
-            Token::EventId(s)    => write!(f, "{s}"     ),
+            Token::FieldId(s)    => write!(f, "{s}"     ),
             Token::SrcId(s)      => write!(f, "{s}"     ),
             Token::Num(n)        => write!(f, "{n}"     ),
             Token::Str(s)        => write!(f, "{s}"     ),
@@ -98,12 +93,11 @@ fn lexer<'src>(dict: HashSet<String>
 
     // WARN: 'X' is reserved for "don't care", however the character 'X' should be allowed as part
     // of another string
-    let dont_care = just('X').to(Token::DontCare);
+    let dont_care = just('X').to(Token::X);
 
     // A parser for identifiers and keywords
     let keyword =
                text::ascii::keyword("src"     ).to(Token::SrcDecl)
-           .or(text::ascii::keyword("field"   ).to(Token::FieldDecl))
            .or(text::ascii::keyword("pattern" ).to(Token::PatternDecl))
            .or(text::ascii::keyword("sequence").to(Token::SeqDecl))
            .or(text::ascii::keyword("rule"    ).to(Token::RuleDecl))
@@ -111,21 +105,16 @@ fn lexer<'src>(dict: HashSet<String>
            .or(text::ascii::keyword("perm"    ).to(Token::Perm))
            .or(text::ascii::keyword("seq"     ).to(Token::Seq));
 
-    let pipeline_id = text::ascii::keyword("MCRT")
-        .or(text::ascii::keyword("Emission"))
-        .or(text::ascii::keyword("Detection"))
-        .map(Token::PipelineId);
-
-    let src_id = text::ascii::keyword("Mat")
-        .or(text::ascii::keyword("MatSurf"))
-        .or(text::ascii::keyword("Surf"))
+    let src_id = text::ascii::keyword("MatId")
+        .or(text::ascii::keyword("MatSurfId"))
+        .or(text::ascii::keyword("SurfId"))
         .or(text::ascii::keyword("LightId"))
         .or(text::ascii::keyword("DetectorId"))
         .map(Token::SrcId);
 
-    let event_id = text::ascii::ident()
+    let field_id = text::ascii::ident()
         .filter(move |&s| dict.contains(s))
-        .map(Token::EventId);
+        .map(Token::FieldId);
 
     let ident = text::ascii::ident().map(Token::Ident);
 
@@ -139,8 +128,7 @@ fn lexer<'src>(dict: HashSet<String>
         .or(predicate)
         .or(keyword)
         .or(src_id)
-        .or(pipeline_id)
-        .or(event_id)
+        .or(field_id)
         .or(dont_care)
         .or(ident);
 
@@ -163,11 +151,11 @@ fn lexer<'src>(dict: HashSet<String>
 // -------------------------------------------------
 
 #[derive(Debug)]
-pub enum SrcId<'src, S>
+pub enum SrcId<'src>
 //where
 //    T: aetherus_events::raw::RawField + std::fmt::Debug,
 {
-    Primitive(S),
+    Primitive(aetherus_events::SrcId),
     None,
     // Resolved
     Mat(u16),
@@ -191,7 +179,7 @@ macro_rules! get_src_id {
     };
 }
 
-impl SrcId<'_, aetherus_events::SrcId> {
+impl<'a> SrcId<'a> {
     pub fn resolve(&self, dict: &HashMap<aetherus_events::ledger::SrcName, aetherus_events::SrcId>) -> Self {
         Self::Primitive(match self {
             Self::Primitive(s)    => *s,
@@ -208,18 +196,38 @@ impl SrcId<'_, aetherus_events::SrcId> {
             Self::DetectorName(n) => get_src_id!(Detector, n.to_string(), dict),
         })
     }
+    pub fn parse_id(src_id_type: &str, id: u16) -> Self {
+        match src_id_type {
+            "MatId"                => Self::Mat(id),
+            "SurfId"               => Self::Surf(id),
+            "MatSurfId"            => Self::MatSurf(id),
+            "LightId"               => Self::Light(id),
+            "DetectorId" | "DetId" => Self::Detector(id),
+            _ => panic!("Unknown source id type: {}", src_id_type),
+        }
+    }
+    pub fn parse_name(src_id_type: &str, name: &'a str) -> Self {
+        match src_id_type {
+            "MatId"                => Self::MatName(name),
+            "SurfId"               => Self::SurfName(name),
+            "MatSurfId"            => Self::MatSurfName(name),
+            "LightId"              => Self::LightName(name),
+            "DetectorId" | "DetId" => Self::DetectorName(name),
+            _ => panic!("Unknown source id type: {}", src_id_type),
+        }
+    }
 }
 
 
 #[derive(Debug)]
 pub enum Value<'src, T>
 {
-    DontCare,
+    X,
     Ident(&'src str),
     Primitive(T),
     // NOTE: There is no reason to support nested "any" since it trivially flattens
-    Any(Vec<Self>),
-    Not(Box<Self>),
+    Any(Vec<Spanned<Self>>),
+    Not(Box<Spanned<Self>>),
 }
 
 // WARN: We don't allow `any[Field]` construction for now or
@@ -228,11 +236,10 @@ pub enum Value<'src, T>
 type Field<'src> = Value<'src, &'src str>;
 
 #[derive(Debug)]
-pub struct Pattern<'src, S>
+pub struct Pattern<'src>
 {
-    pipeline: &'src str,
-    event: Vec<Field<'src>>,
-    src: Value<'src, SrcId<'src, S>>,
+    fields: Vec<Spanned<Field<'src>>>,
+    src: Spanned<Value<'src, SrcId<'src>>>,
 }
 
 #[derive(Debug)]
@@ -251,17 +258,17 @@ pub enum Repetition {
 #[derive(Debug)]
 pub enum SeqTree<'src> {
     Ident(&'src str),
-    Primitive((Repetition, Value<'src, Pattern<'src>>)),
+    Primitive((Repetition, Spanned<Value<'src, Pattern<'src>>>)),
     // TODO: Enable permutations with splatting (Julia nomenclature)
-    Perm(Vec<Self>),
+    Perm(Vec<Spanned<Self>>),
     // NOTE: Nested sequence are unrolled
-    Seq(Vec<Self>),
+    Seq(Vec<Spanned<Self>>),
 }
 
 #[derive(Debug)]
 pub enum Condition<'src> {
-    Pattern(Repetition, Pattern<'src>),
-    Sequence(SeqTree<'src>),
+    Pattern(Repetition, Spanned<Value<'src, Pattern<'src>>>),
+    Sequence(Spanned<SeqTree<'src>>),
 }
 
 #[derive(Debug)]
@@ -270,150 +277,149 @@ pub struct Rule<'src> {
     conditions: Vec<Value<'src, Condition<'src>>>,
 }
 
-#[derive(Debug)]
-pub enum SyntaxTree<'src> {
-    Declarations(Vec<(Self, Span)>),
-    SrcDecl(&'src str, Vec<Spanned<Self>>),
-    PatternDecl(&'src str, Box<Spanned<Self>>),
-    SeqDecl(&'src str, Box<Spanned<Self>>),
-    RuleDecl(&'src str, Box<Spanned<Self>>),
-    Seq(Spanned<SeqTree<'src>>),
-    Src(Spanned<SrcId<'src>>),
-    Pattern(Spanned<Pattern<'src>>),
-    Rule(Spanned<Rule<'src>>),
-}
-
 pub enum DeclarationBody<'src> {
-    Src(Spanned<SrcId<'src>>),
-    Pattern(Spanned<Pattern<'src>>),
-    Seq(Spanned<SeqTree<'src>>),
-    Rule(Spanned<Rule<'src>>),
+    Src(Value<'src, SrcId<'src>>),
+    Pattern(Pattern<'src>),
+    Seq(SeqTree<'src>),
+    Rule(Rule<'src>),
 }
 
 pub struct Declaration<'src> {
-    //name: &'src str,
+    name: &'src str,
     span: Span,
-    body: DeclarationBody<'src>,
+    body: Spanned<DeclarationBody<'src>>,
 }
 
 fn expr_parser<'tokens, 'src: 'tokens, I>()
--> impl Parser<'tokens, I, Spanned<SyntaxTree<'src>>, extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone
+-> impl Parser<'tokens, I, Spanned<Vec<Declaration<'src>>>, extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone
 where
     I: ValueInput<'tokens, Token = Token<'src>, Span = Span>,
 {
+    let src_id_name = select!{Token::SrcId(src_id_type) => src_id_type }
+        .then_ignore(just(Token::Ctrl('(')))
+        .then(select!{Token::Str(src_id_name) => src_id_name})
+        .map_with(|(src_id_type, src_id_name), e|
+            (SrcId::parse_name(src_id_type, src_id_name), e.span())
+        );
+    let src_id_val = select!{Token::SrcId(src_id_type) => src_id_type }
+        .then_ignore(just(Token::Ctrl('(')))
+        .then(select!{Token::Num(src_id_val) => src_id_val})
+        .map_with(|(src_id_type, src_id_val), e|
+            (SrcId::parse_id(src_id_type, src_id_val), e.span())
+        );
+    let src_id = src_id_name.or(src_id_val);
 
-        let inline_expr = recursive(|inline_expr| {
-            let val = select! {
-                Token::Num(n) => Expr::Value(Value::Num(n)),
-                Token::Str(s) => Expr::Value(Value::Str(s)),
-            }
-            .labelled("value");
+    let src_id_items =
+        src_id
+        .separated_by(just(Token::Ctrl(',')))
+        .collect::<Vec<_>>();
 
-            let ident = select! { Token::Ident(ident) => ident }.labelled("identifier");
+    let src_id_any =
+            just(Token::Any)
+            .ignore_then(just(Token::Ctrl('[')))
+            .ignore_then(src_id_items)
+            .then_ignore(just(Token::Ctrl(']')))
+            .map_with(|src_id_items, e| (Value::Any(src_id_items), e.span()))
 
-            // A list of expressions
-            let items = expr
-                .clone()
-                .separated_by(just(Token::Ctrl(',')))
-                .allow_trailing()
-                .collect::<Vec<_>>();
+    let src_id_value =
+        src_id.map_with(|src_id, e| (Value::Primitive(src_id), e.span()))
+        .or(src_id_any)
+        .or(select!{Token::Ident(ident) => Value::Ident(ident)}.map_with(|val, e| (val, e.span())))
+        .or(just(Token::X).map_with(|_, e| (Value::X, e.span())));
 
-            // A let expression
-            let let_ = just(Token::Let)
-                .ignore_then(ident)
-                .then_ignore(just(Token::Op("=")))
-                .then(inline_expr)
-                .then_ignore(just(Token::Ctrl(';')))
-                .then(expr.clone())
-                .map(|((name, val), body)| Expr::Let(name, Box::new(val), Box::new(body)));
-
-            let list = items
-                .clone()
-                .map(Expr::List)
-                .delimited_by(just(Token::Ctrl('[')), just(Token::Ctrl(']')));
-
-            // 'Atoms' are expressions that contain no ambiguity
-            let atom = val
-                .or(ident.map(Expr::Local))
-                .or(let_)
-                .or(list)
-                // In Nano Rust, `print` is just a keyword, just like Python 2, for simplicity
-                .or(just(Token::Print)
-                    .ignore_then(
-                        expr.clone()
-                            .delimited_by(just(Token::Ctrl('(')), just(Token::Ctrl(')'))),
-                    )
-                    .map(|expr| Expr::Print(Box::new(expr))))
-                .map_with(|expr, e| (expr, e.span()))
-                // Atoms can also just be normal expressions, but surrounded with parentheses
-                .or(expr
-                    .clone()
-                    .delimited_by(just(Token::Ctrl('(')), just(Token::Ctrl(')'))))
-                // Attempt to recover anything that looks like a parenthesised expression but contains errors
-                .recover_with(via_parser(nested_delimiters(
-                    Token::Ctrl('('),
-                    Token::Ctrl(')'),
-                    [
-                        (Token::Ctrl('['), Token::Ctrl(']')),
-                        (Token::Ctrl('{'), Token::Ctrl('}')),
-                    ],
-                    |span| (Expr::Error, span),
-                )))
-                // Attempt to recover anything that looks like a list but contains errors
-                .recover_with(via_parser(nested_delimiters(
-                    Token::Ctrl('['),
-                    Token::Ctrl(']'),
-                    [
-                        (Token::Ctrl('('), Token::Ctrl(')')),
-                        (Token::Ctrl('{'), Token::Ctrl('}')),
-                    ],
-                    |span| (Expr::Error, span),
-                )))
-                .boxed();
-
-            // Function calls have very high precedence so we prioritise them
-            let call = atom.foldl_with(
-                items
-                    .delimited_by(just(Token::Ctrl('(')), just(Token::Ctrl(')')))
-                    .map_with(|args, e| (args, e.span()))
-                    .repeated(),
-                |f, args, e| (Expr::Call(Box::new(f), args), e.span()),
-            );
-
-            // Product ops (multiply and divide) have equal precedence
-            let op = just(Token::Op("*"))
-                .to(BinaryOp::Mul)
-                .or(just(Token::Op("/")).to(BinaryOp::Div));
-            let product = call
-                .clone()
-                .foldl_with(op.then(call).repeated(), |a, (op, b), e| {
-                    (Expr::Binary(Box::new(a), op, Box::new(b)), e.span())
-                });
-
-            // Sum ops (add and subtract) have equal precedence
-            let op = just(Token::Op("+"))
-                .to(BinaryOp::Add)
-                .or(just(Token::Op("-")).to(BinaryOp::Sub));
-            let sum = product
-                .clone()
-                .foldl_with(op.then(product).repeated(), |a, (op, b), e| {
-                    (Expr::Binary(Box::new(a), op, Box::new(b)), e.span())
-                });
-
-            // Comparison ops (equal, not-equal) have equal precedence
-            let op = just(Token::Op("=="))
-                .to(BinaryOp::Eq)
-                .or(just(Token::Op("!=")).to(BinaryOp::NotEq));
-            let compare = sum
-                .clone()
-                .foldl_with(op.then(sum).repeated(), |a, (op, b), e| {
-                    (Expr::Binary(Box::new(a), op, Box::new(b)), e.span())
-                });
-
-            compare.labelled("expression").as_context()
+    let src_decl = just(Token::SrcDecl)
+        .ignore_then(select!{Token::Ident(ident) => ident})
+        .then_ignore(just(Token::Ctrl('=')))
+        .then(src_id_value)
+        .map_with(|(name, src_id_val), e| Declaration {
+            name,
+            span: e.span(),
+            body: DeclarationBody::Src(src_id_val),
         });
 
+    let fields = select! {
+            Token::FieldId(f) => Value::Primitive(f),
+            Token::Ident(s)   => Value::Ident(s),
+            Token::X          => Value::X,
+        }
+        .separated_by(just(Token::Concat).padded())
+        .at_least(1)
+        .collect::<Vec<_>>();
 
+    let pattern = fields
+        .then_ignore(just(Token::Concat))
+        .then(src_id_value)
+        .map(|(fields, src_id)| Pattern {
+            fields,
+            src: src_id,
+        });
+
+    let pattern_decl = just(Token::PatternDecl)
+        .ignore_then(select!{Token::Ident(ident) => ident})
+        .then_ignore(just(Token::Ctrl('=')))
+        .then(pattern)
+        .map_with(|(name, pattern), e| Declaration {
+            name,
+            span: e.span(),
+            body: DeclarationBody::Pattern((pattern, e.span())),
+        });
+
+    let predicated_pattern = just(Token::Predicates('!'))
+        .ignore_then(pattern)
+        .map(|p| Value::Not(Box::new(Value::Primitive(p))))
+        .or(pattern);
+
+    let repetition = select! {
+            Token::Predicates('*') => Repetition::ZeroOrMore,
+            Token::Predicates('+') => Repetition::OneOrMore,
+            Token::Predicates('?') => Repetition::Optional,
+        }
+        .or(
+            just(Token::Ctrl('{'))
+                .ignore_then(select! { Token::Num(n) => n }.or_not())
+                .then(
+                    just(Token::Ctrl(','))
+                        .ignore_then(select! { Token::Num(m) => m }.or_not())
+                        .or_not()
+                )
+                .then_ignore(just(Token::Ctrl('}')))
+                .map(|(n_opt, m_opt)| match (n_opt, m_opt) {
+                    (Some(n), None)          => Repetition::NTimes(n),
+                    (Some(n), Some(None))    => Repetition::AtLeast(n),
+                    (None, Some(Some(m)))    => Repetition::AtMost(m),
+                    (Some(n), Some(Some(m))) => Repetition::Interval(n, m),
+                    _                        => Repetition::Unit, // fallback for invalid syntax
+                })
+        );
+
+    let repetition_pattern = repetition
+        .then(predicated_pattern)
+        .map(|(r, p)| (r, p))
+        .or(predicated_pattern.map(|p| (Repetition::Unit, p)));
+
+    let pattern_items = repetition_pattern
+        .separated_by(just(Token::Ctrl(',')))
+        .collect::<Vec<_>>();
+
+    let seq_decl = just(Token::SeqDecl)
+        .ignore_then(just(Token::Ident))
+        .then_ignore(just(Token::Ctrl('=')))
+        .then_ignore(just(Token::Seq).or_not())
+        .then(pattern_items.delimited_by(just(Token::Ctrl('[')), just(Token::Ctrl(']'))))
+        .map_with(|((name, (patterns, pat_span)), e)| Declaration {
+            name,
+            span: e.span(),
+            body: DeclarationBody::Seq((
+                SeqTree::Seq(patterns.iter().map(|p| SeqTree::Primitive(p)).collect()),
+                pat_span,
+            )),
+        });
+
+    let decl = src_decl
+        .or(pattern_decl)
+        .or(seq_decl);
+
+    decl
 }
 
 
@@ -515,13 +521,15 @@ fn main() {
     let src = &fs::read_to_string(&filename).expect("Failed to read file");
 
     let dict = HashSet::from([
+        "MCRT".to_string(),
+        "Emission".to_string(),
+        "Detection".to_string(),
         "Material".to_string(),
         "Interface".to_string(),
         "Reflector".to_string(),
         "Elastic".to_string(),
         "Inelastic".to_string(),
-        "Henyey-Greenstein".to_string(),
-        "HG".to_string(),
+        "HenyeyGreenstein".to_string(),
         "Rayleigh".to_string(),
         "Mie".to_string(),
         "Raman".to_string(),
@@ -529,7 +537,7 @@ fn main() {
         "Forward".to_string(),
         "Backward".to_string(),
         "Side".to_string(),
-        "Any".to_string(),
+        "Unknown".to_string(),
     ]);
 
     let tokens = lexer(dict)
