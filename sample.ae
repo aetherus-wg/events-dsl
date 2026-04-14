@@ -5,7 +5,8 @@
 # Define material and surface identifiers we want to match for
 # ============================================================
 
-src water_id = any[Mat("seawater"), Mat("Water:Water_material"), Mat(0x0001)]
+src water_id = any[ Mat("seawater"), Mat("Water:Water_material"), Mat(0xa0) ]
+
 
 # Define encoding patterns to match for
 # =====================================
@@ -16,22 +17,23 @@ pattern water_scatter     = MCRT | Material  | Elastic | X       | water_id
 # ==============================================================
 
 sequence water_backscatter = seq[
-  Emission | X | LighId(0),
+  Emission | X | Light(0),
   * X,
   water_scatter,
   * X,
-  Detection | X | DetId(0),
+  Detection | X | Detector(0),
 ]
 
 # Note how rule tries to validate all conditions enumerated
-rule backscatter = {
-  ! any[tube_surf, toy_surf],
-  seq[
-    Emission | X | LighId(0),
-    * X,
-    water_scatter,
-    * X,
-    Detection | X | DetId(0),
-  ],
-  water_backscatter, # equivalent to the inline expression above
-}
+#rule backscatter = {
+#  ! any[tube_surf, toy_surf],
+#  seq[
+#    Emission | X | LighId(0),
+#    * X,
+#    water_scatter,
+#    * X,
+#    Detection | X | DetId(0),
+#  ],
+#  water_backscatter, # equivalent to the inline expression above
+#}
+
