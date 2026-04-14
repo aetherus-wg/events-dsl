@@ -82,6 +82,56 @@ fn parse_encodings(src: &str) -> Result<Vec<Encoding>> {
     Ok(encodings)
 }
 
+fn resolved_dir_encodings(encodings: &Vec<Encoding>) -> Vec<Encoding> {
+    let dir_fields: Vec<Field> = encodings
+        .iter()
+        .map(|Encoding(fields_encoding)| fields_encoding)
+        .filter_map(|fields_encoding|
+            fields_encoding.iter().find(|&field|
+                matches!(field, Field::Named{name, attr, bits: _, size: _} if attr.as_deref() == Some("Direction"))).cloned()
+        )
+        .collect();
+    encodings
+        .iter()
+        .flat_map(|Encoding(fields_encoding)| {
+            fields_encoding
+                .iter()
+                .enumerate()
+                .filter_map(|(pos, field)|
+                    matches!(
+                        field,
+                        Field::X {attr, size: field_size} if attr.as_deref() == Some("Direction")
+                    )
+                    .then_some(pos)
+                )
+                .flat_map({
+                    let dir_fields_captured = dir_fields.clone();
+                    move |pos| {
+                    dir_fields_captured
+                            .clone()
+                            .into_iter()
+                            .map(move |dir_field| {
+                                assert_eq!(dir_field.size(), fields_encoding[pos].size());
+                                let mut new_encoding = fields_encoding.clone();
+                                new_encoding[pos] = dir_field.clone();
+                                Encoding(new_encoding)
+                            })
+                }})
+        })
+        .collect()
+    //if let Some(pos) = fields_encoding
+    //    .iter()
+    //    .position(|field| matches!(
+    //        field,
+    //        Field::X{ attr, size: _} if attr.as_deref() == Some("Direction")
+    //    ))
+    //{
+    //    let mut new_encoding = fields_encoding.clone();
+    //    new_encoding[pos] = Field::Named { name: "Forward".to_string(), attr: Some("Direction".to_string()), bits: BitsMatch{mask: 0, value: 0}, size: 2};
+    //    encodings.push(Encoding(new_encoding));
+    //}
+}
+
 fn main() -> Result<()> {
 
     env_logger::init();
@@ -90,6 +140,7 @@ fn main() -> Result<()> {
     let src = &fs::read_to_string(&filename).expect("Failed to read file");
 
     let encodings = parse_encodings(src)?;
+    let dir_encodings = resolved_dir_encodings(&encodings);
     //println!("Parsed encodings: {:#?}", encodings);
 
     let mut trie = Trie::new();
@@ -97,9 +148,15 @@ fn main() -> Result<()> {
         trie.insert(&encoding);
     }
 
-    //println!("{:#?}", trie);
-
     let dot_file = filename.replace(".md", ".dot");
+    let graphviz_dot = trie.emit_dot();
+    std::fs::write(&dot_file, graphviz_dot).expect("Failed to write DOT file");
+
+    for encoding in dir_encodings {
+        trie.insert(&encoding);
+    }
+
+    let dot_file = filename.replace(".md", "_complete.dot");
     let graphviz_dot = trie.emit_dot();
     std::fs::write(&dot_file, graphviz_dot).expect("Failed to write DOT file");
 
@@ -107,6 +164,7 @@ fn main() -> Result<()> {
         pattern::Field::Field("MCRT"),
         pattern::Field::Field("Material"),
         pattern::Field::Field("Elastic"),
+        //pattern::Field::Field("Mie"),
         pattern::Field::X,
         pattern::Field::Field("Forward"),
         //pattern::Field::X,

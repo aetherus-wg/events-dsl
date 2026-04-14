@@ -168,24 +168,6 @@ pub fn search_trie(trie_node: &TrieNode, pattern: &Pattern, attrs_map: &HashMap<
                         check_prev_x = false; // Match implies barrier on the X in the Trie
                     }
                 }
-                (Field::Field(name), trie::Field::X { attr: Some(attr), .. }) => {
-                    if attrs_map
-                        .get(attr)
-                        .is_some_and(|values| values.contains(&name.to_string()))
-                    {
-                        stack.push(entry.step_trie(&child_field, &child_node).step_pattern());
-                        check_prev_x = false; // Match implies barrier on the X in the Trie
-                    }
-                }
-                (Field::Field(_name), trie::Field::X { .. }) => {
-                    stack.push(entry.step_trie(&child_field, &child_node).step_pattern());
-                }
-                (Field::X, trie::Field::Named { .. }) => {
-                    // NOTE: Avoid the need to find min products sum, and don't allow Pattern::X to
-                    // consume named fields from the Trie
-                    // stack.push(entry.step_trie(&child_field, &child_node));
-                    // stack.push(entry.step_trie(&child_field, &child_node).step_pattern());
-                }
                 (Field::X, trie::Field::X { .. }) => {
                     stack.push(entry.step_trie(&child_field, &child_node));
                     stack.push(entry.step_trie(&child_field, &child_node).step_pattern());
@@ -194,6 +176,14 @@ pub fn search_trie(trie_node: &TrieNode, pattern: &Pattern, attrs_map: &HashMap<
                     // End of trie, so advancing only pattern is certainly going to be dropped
                     assert!(child_node.is_terminal);
                     stack.push(entry.step_trie(&child_field, &child_node).step_pattern().with_src_id(src_id.clone()));
+                }
+                (Field::Field(_), trie::Field::X { .. }) => {
+                    // Trie holds all possible routes that it can be specified,
+                    // hence avoid matching specified field in pattern to X in Trie
+                }
+                (Field::X, trie::Field::Named { .. }) => {
+                    // NOTE: Avoid the need to find min products sum, and don't allow Pattern::X to
+                    // consume named fields from the Trie
                 }
                 (Field::Field(_), trie::Field::SrcId(_)) => { }
                 (Field::SrcId(_), trie::Field::X{..}) => { }
