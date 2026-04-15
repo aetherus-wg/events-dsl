@@ -149,10 +149,27 @@ where
                 .map_with(|ident, e| (Expr::Ident(ident), e.span()))
         );
 
+    let inline_pattern_items = inline_pattern.clone()
+        .separated_by(just(Token::Ctrl(',')))
+        .collect::<Vec<_>>();
+
+    let pattern_any =
+            just(Token::Any)
+            .ignore_then(inline_pattern_items.delimited_by(just(Token::Ctrl('[')), just(Token::Ctrl(']'))))
+            .map_with(|patterns, e| (Expr::Any(patterns), e.span()));
+
+    let pattern_set = inline_pattern.clone()
+        .or(pattern_any)
+        .or(
+            select!{Token::X => Expr::X}
+                .map_with(|expr, e| (expr, e.span()))
+        )
+        .boxed();
+
     let predicated_pattern = just(Token::Predicates('!'))
-        .ignore_then(inline_pattern.clone())
+        .ignore_then(pattern_set.clone())
         .map_with(|p, e| (Expr::Not(Box::new(p)), e.span()))
-        .or(inline_pattern.clone());
+        .or(pattern_set.clone());
 
     let repetition = select! {
             Token::Predicates('*') => Repetition::ZeroOrMore,
@@ -178,13 +195,7 @@ where
         );
 
     let repetition_pattern = repetition
-        .then(
-            predicated_pattern.clone()
-            .or(
-                select!{Token::X => Expr::X}
-                    .map_with(|expr, e| (expr, e.span()))
-            )
-        )
+        .then(predicated_pattern.clone())
         .map_with(|(r, p), e| (Expr::Repeat(r, Box::new(p)), e.span()))
         .or(predicated_pattern.map_with(|p, e| (Expr::Repeat(Repetition::Unit, Box::new(p)), e.span())));
 
@@ -197,8 +208,8 @@ where
             .ignore_then(just(Token::Ctrl('[')))
             .ignore_then(pattern_items)
             .then_ignore(just(Token::Ctrl(']')))
-            .map_with(|items, e| (Expr::Seq(items), e.span()));
-
+            .map_with(|items, e| (Expr::Seq(items), e.span()))
+            .boxed();
 
     let decl_src = just(Token::SrcDecl)
         .ignore_then(select!{Token::Ident(ident) => ident})
@@ -225,7 +236,7 @@ where
     let decl_seq = just(Token::SeqDecl)
         .ignore_then(select!{Token::Ident(ident) => ident})
         .then_ignore(just(Token::Ctrl('=')))
-        .then(seq)
+        .then(seq.clone())
         .map_with(|(name, seq), e| Declaration {
             name,
             span: e.span(),
@@ -233,9 +244,30 @@ where
         })
         .boxed();
 
+    let condition = repetition_pattern.clone()
+        .or(seq);
+
+    let condition_items = condition
+        .separated_by(just(Token::Ctrl(',')))
+        .allow_trailing()
+        .collect::<Vec<_>>()
+        .map_with(|items, e| (items, e.span()));
+
+    let decl_rule = just(Token::RuleDecl)
+        .ignore_then(select!{Token::Ident(ident) => ident})
+        .then_ignore(just(Token::Ctrl('=')))
+        .then(condition_items.delimited_by(just(Token::Ctrl('{')), just(Token::Ctrl('}'))))
+        .map_with(|(name, (items, items_span)), e| Declaration {
+            name,
+            span: e.span(),
+            body: (Expr::Rule(items), items_span),
+        })
+        .boxed();
+
     let decl = decl_src
         .or(decl_seq)
-        .or(decl_pattern);
+        .or(decl_pattern)
+        .or(decl_rule);
 
     decl.repeated().at_least(1).collect::<Vec<_>>()
 }

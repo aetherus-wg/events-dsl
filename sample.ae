@@ -18,6 +18,7 @@ pattern water_scatter     = MCRT | Material  | Elastic | X       | water_id
 
 sequence water_backscatter = seq[
   Emission | X | Light(0),
+  ! any[ water_scatter,  MCRT| Material | X | Mat(0) ],
   * X,
   water_scatter,
   * X,
@@ -25,15 +26,15 @@ sequence water_backscatter = seq[
 ]
 
 # Note how rule tries to validate all conditions enumerated
-#rule backscatter = {
-#  ! any[tube_surf, toy_surf],
-#  seq[
-#    Emission | X | LighId(0),
-#    * X,
-#    water_scatter,
-#    * X,
-#    Detection | X | DetId(0),
-#  ],
-#  water_backscatter, # equivalent to the inline expression above
-#}
+rule backscatter = {
+  ! any[tube_surf, toy_surf],
+  seq[
+    Emission | X | Light(0),
+    * X,
+    water_scatter,
+    * X,
+    Detection | X | Detector(0),
+  ],
+  water_backscatter, # equivalent to the inline expression above
+}
 
