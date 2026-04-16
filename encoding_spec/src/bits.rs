@@ -33,6 +33,18 @@ pub struct BitsMatch {
     pub value: u32,
 }
 
+impl From<aetherus_events::filter::BitsMatch> for BitsMatch {
+    fn from(other: aetherus_events::filter::BitsMatch) -> Self {
+        BitsMatch { mask: other.mask, value: other.value }
+    }
+}
+
+impl Into<aetherus_events::filter::BitsMatch> for BitsMatch {
+    fn into(self) -> aetherus_events::filter::BitsMatch {
+        aetherus_events::filter::BitsMatch { mask: self.mask, value: self.value }
+    }
+}
+
 impl std::fmt::Debug for BitsMatch {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "BitsMatch {{ mask: 0x{:x}, value: 0x{:x} }}", self.mask, self.value)

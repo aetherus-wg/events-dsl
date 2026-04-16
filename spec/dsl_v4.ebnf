@@ -1,0 +1,58 @@
+Declarations = { Declaration };
+
+Declaration = SrcDecl
+            | SeqDecl
+            | PatternDecl
+            | RuleDecl
+            ;
+
+SrcDecl     = "src" Ident "=" SrcIdValue ;
+PatternDecl = "pattern" Ident "=" Pattern ;
+SeqDecl     = "sequence" Ident "=" Seq ;
+RuleDecl    = "rule" Ident "=" "{" ConditionItems "}" ;
+
+SrcIdValue = SrcId | SrcIdAny | Ident | "X" ;
+
+SrcId      = SrcIdName | SrcIdVal ;
+SrcIdName  = SrcIdType "(" String ")" ;
+SrcIdVal   = SrcIdType "(" Number ")" ;
+SrcIdType  = "Mat" | "Surf" | "MatSurf" | "Light" | "Detector" ;
+
+SrcIdAny   = "any" "[" SrcIdItems "]" ;
+SrcIdItems = SrcIdItem { "," SrcIdItem } ;
+SrcIdItem  = SrcId | Ident ;
+
+Pattern    = Fields "|" SrcIdValue ;
+Fields     = FieldExpr { "|" FieldExpr } ;
+FieldExpr  = FieldId | "X" ;
+
+InlinePattern       = Pattern | Ident ;
+InlinePatternItems  = InlinePattern { "," InlinePattern } ;
+PatternAny          = "any" "[" InlinePatternItems "]" ;
+PatternSet          = InlinePattern | PatternAny | "X" ;
+PredicatedPattern   = "!" PatternSet | PatternSet ;
+
+Repetition = "*"
+           | "+"
+           | "?"
+           | "{" [ Number ] [ "," [ Number ] ] "}"
+           ;
+
+RepetitionPattern = Repetition PredicatedPattern
+                   | PredicatedPattern ;
+
+PatternItems = RepetitionPattern { "," RepetitionPattern } ;
+
+Seq = "seq" "[" PatternItems "]" ;
+
+Condition      = RepetitionPattern | Seq ;
+ConditionItems = Condition { "," Condition } ;
+
+FieldId   = Ident ;
+Ident     = letter { letter | digit | "_" | "." } ;
+Decimal   = digit { digit } ;
+Hex       = "0x" hex_digit { hex_digit } ;
+Number    = Decimal | Hex ;
+String    = "\"" { Character } "\"" ;
+Character = character
+            | ["\\"] anycharacter ;

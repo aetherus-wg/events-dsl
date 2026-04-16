@@ -1,41 +1,9 @@
-use std::{collections::{HashMap, HashSet}, env, fmt::{self, Debug}, fs};
+use std::{env, fmt, fs};
 use ariadne::{sources, Color, Label, Report, ReportKind};
-use filter_dsl::{expr::expr_parser, tokenizer::lexer};
+use filter_dsl::{parse::expr_parser, token::lexer};
 use itertools::Itertools;
 
-use chumsky::{input::ValueInput, prelude::*};
-use aetherus_events::{SrcId as DomainSrcId, ledger::SrcName};
-
-/// -------------------------------------------------
-/// Semantic Model
-/// -------------------------------------------------
-
-//pub enum Expr<'src> {
-//    Field(Field<'src>),
-//    // (pipeline, event, src_id)
-//    //  - event can be Concat(..) = SuperEvent | SubEvent | SubSubEvent
-//    Pattern((Field<'src>, Box<Expr<'src>>, Field<'src>)),
-//    Any(Vec<Expr<'src>>),
-//    Perm(Vec<Expr<'src>>),
-//    Seq(Vec<Expr<'src>>),
-//    Qualifier(Vec<Expr<'src>>),
-//    Concat(Box<Expr<'src>>, Box<Expr<'src>>),
-//}
-
-/// -------------------------------------------------
-/// Control Domain Model from Semantics Model
-/// -------------------------------------------------
-
-//pub struct BitsMatch {
-//    mask: u32,
-//    value: u32,
-//}
-//
-//pub enum PatternMatch {
-//    Positive(BitsMatch),
-//    Negative(BitsMatch),
-//    Composite{pos: BitsMatch, neg: BitsMatch},
-//}
+use chumsky::prelude::*;
 
 // -----------------------------------------------
 // Parsing helpers
@@ -83,33 +51,21 @@ fn parse_failure(err: &Rich<impl fmt::Display>, src: &str) -> ! {
 }
 
 fn main() {
-    let filename = env::args().nth(1).expect("Expected file argument");
-    let src = &fs::read_to_string(&filename).expect("Failed to read file");
+    let encoding_filename = env::args().nth(1).expect("Expected file argument for encoding scheme");
+    let encoding_src = &fs::read_to_string(&encoding_filename).expect("Failed to read encoding scheme file");
 
-    let dict = HashSet::from([
-        "MCRT".to_string(),
-        "Emission".to_string(),
-        "Detection".to_string(),
-        "Material".to_string(),
-        "Interface".to_string(),
-        "Reflector".to_string(),
-        "Elastic".to_string(),
-        "Inelastic".to_string(),
-        "HenyeyGreenstein".to_string(),
-        "Rayleigh".to_string(),
-        "Mie".to_string(),
-        "Raman".to_string(),
-        "Fluorescence".to_string(),
-        "Forward".to_string(),
-        "Backward".to_string(),
-        "Side".to_string(),
-        "Unknown".to_string(),
-    ]);
+    let script_filename = env::args().nth(2).expect("Expected file argument for DSL script");
+    let script_src = &fs::read_to_string(&script_filename).expect("Failed to read script file");
 
-    let tokens = lexer(dict)
-        .parse(src)
+    let trie = encoding_spec::build_decoder(encoding_src).expect("Failed to build decoder from encoding scheme");
+
+    let dict = trie.get_fields();
+    println!("FieldId dictionary: {:?}", dict);
+
+    let tokens = lexer(&dict)
+        .parse(script_src)
         .into_result()
-        .unwrap_or_else(|errs| parse_failure(&errs[0], src));
+        .unwrap_or_else(|errs| parse_failure(&errs[0], script_src));
 
     println!("Tokens: {}", tokens.iter().map(|t| t.0.to_string()).join(" "));
     //println!("Tokens: {:?}", tokens);
@@ -118,11 +74,10 @@ fn main() {
         .parse(
             tokens
                 .as_slice()
-                .map((src.len()..src.len()).into(), |(t, s)| (t, s)),
+                .map((script_src.len()..script_src.len()).into(), |(t, s)| (t, s)),
         )
         .into_result()
-        .unwrap_or_else(|errs| parse_failure(&errs[0], src));
+        .unwrap_or_else(|errs| parse_failure(&errs[0], script_src));
 
-    println!("Declarations: {:?}", declarations);
-
+    //println!("Declarations: {:?}", declarations);
 }

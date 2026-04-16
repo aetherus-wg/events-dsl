@@ -1,5 +1,5 @@
-use crate::{SrcId, bits::BitsMatch};
-use std::str::FromStr;
+use crate::{SrcId, bits::BitsMatch, pattern::{Pattern, search_trie}};
+use std::{collections::HashSet, str::FromStr};
 use anyhow::{anyhow, Error};
 
 #[derive(Debug, Clone, Hash)]
@@ -92,6 +92,7 @@ impl Eq for Field {}
 #[derive(Debug)]
 pub struct Encoding(pub Vec<Field>);
 
+#[macro_export]
 macro_rules! encoding {
     ($($field:ident, $bits:expr),* ,$src_id:ident) => {
         let lens = vec![$($bits),*].iter().map(|b| stringify!($src_id).split("0b")[1].len()).sum::<usize>();
@@ -149,6 +150,7 @@ impl Trie {
         current.is_terminal = true;
     }
 
+    /// Emits a DOT format string representing the trie, which can be visualized using Graphviz.
     pub fn emit_dot(&self) -> String {
         fn walk(node: &TrieNode, id: usize, next_id: &mut usize, out: &mut String) {
             if node.is_terminal {
@@ -165,73 +167,55 @@ impl Trie {
             }
         }
 
-        let mut out = String::from("digraph Trie {\nrankdir=LR;\nnode [fontname=\"Arial\"];\n");
+        let mut out = String::from("digraph Trie {\nrankdir=TB;\nnode [fontname=\"Arial\"];\n");
         let mut next_id = 0;
         walk(&self.root, 0, &mut next_id, &mut out);
         out.push_str("}\n");
         out
     }
 
-    /// Returns true if the trie contains 'query' as a partial encoding.
+    /// Returns the bits match and SrcId field type for the specified Pattern
     ///
     /// # Examples
     ///
     /// ```
-    /// use basic_trie::Trie;
+    /// use encoding_spec::Trie;
     /// let mut trie = Trie::new();
     ///
     /// let encoding = encoding!(MCRT, 0b0011, Material, 0b01, Elastic, 0b10, X, 0b0000, MatSurfId);
     ///
     /// trie.insert(encoding);
-    /// assert!(trie.contains(vec![Some("MCRT"), Some("Material"), Some("Elastic"), None, Some("MatSurfId")]));
-    /// assert!(!trie.contains(vec![Some("MCRT"), Some("Material"), Some("Elastic"), Some("MatSurfId")]));
+    /// let pattern = Pattern(vec![
+    ///     pattern::Field::Field("MCRT"),
+    ///     pattern::Field::Field("Material"),
+    ///     pattern::Field::Field("Elastic"),
+    ///     pattern::Field::X,
+    ///     pattern::Field::SrcId(SrcId::MatId),
+    /// ]);
+    ///
+    /// let (bits_match, src_id_type)= trie.get(&pattern);
+    /// assert_eq!(bits_match, BitsMatch{mask: 0x0ff00000, value: 0x03600000});
     /// ```
-    //pub fn contains(&self, query: Vec<Option<&str>>) -> bool {
-    //    self.get_final_node(query)
-    //        .is_some_and(|node| node.is_associated())
-    //}
-
-    /// Returns an option enum with a vector of owned strings
-    /// representing all found words that begin with 'query'.
-    /// If the word 'query' doesn't exist, None is returned.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use basic_trie::Trie;
-    /// let mut trie = Trie::new();
-    ///
-    /// trie.insert("word1");
-    /// trie.insert("word2");
-    ///
-    /// let all_correct_words = vec![String::from("word1"), String::from("word2")];
-    /// let mut found_words = trie.get("word").unwrap();
-    /// found_words.sort();
-    /// assert_eq!(all_correct_words, found_words);
-    /// ```
-    pub fn get(&self, query: Vec<Option<&str>>) -> Option<Vec<String>> {
-        todo!()
+    pub fn get(&self, query: &Pattern) -> (BitsMatch, SrcId) {
+        search_trie(&self.root, query)
     }
-    //pub fn get(&self, query: Vec<Option<&str>>) -> Option<Vec<String>> {
-    //    let mut substring = String::new();
-    //    let mut current_node = &self.root;
-    //    let characters = get_characters(query);
 
-    //    for character in characters {
-    //        current_node = match current_node.children.get(character) {
-    //            None => return None,
-    //            Some(trie_node) => {
-    //                substring.push(character);
-    //                trie_node
-    //            }
-    //        }
-    //    }
-
-    //    let mut words_vec = Vec::new();
-    //    current_node.find_words(&mut substring, &mut words_vec);
-
-    //    Some(words_vec)
-    //}
+    /// Returns a list of all fields
+    pub fn get_fields(&self) -> HashSet<String> {
+        let mut fields = HashSet::new();
+        let mut stack = vec![&self.root];
+        while let Some(node) = stack.pop() {
+            for (field, child) in &node.children {
+                if !child.is_terminal {
+                    if let Field::Named { name, .. } = field {
+                        fields.insert(name.to_string());
+                    }
+                    stack.push(child);
+                }
+            }
+        }
+        fields
+    }
 }
 
 impl TrieNode {

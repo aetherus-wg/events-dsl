@@ -50,24 +50,24 @@ impl fmt::Display for Token<'_> {
             Token::Ctrl(c)       => write!(f, "{c}"     ),
             Token::Predicates(c) => write!(f, "{c}"     ),
             Token::Concat        => write!(f, "|"       ),
-            Token::X      => write!(f, "X"       ),
+            Token::X             => write!(f, "X"       ),
             Token::Any           => write!(f, "any"     ),
             Token::Perm          => write!(f, "perm"    ),
             Token::Seq           => write!(f, "seq"     ),
             Token::SrcDecl       => write!(f, "src"     ),
             Token::PatternDecl   => write!(f, "pattern" ),
             Token::SeqDecl       => write!(f, "sequence"),
-            Token::RuleDecl          => write!(f, "rule"    ),
+            Token::RuleDecl      => write!(f, "rule"    ),
             Token::Ident(s)      => write!(f, "{s}"     ),
             Token::FieldId(s)    => write!(f, "{s}"     ),
             Token::SrcId(s)      => write!(f, "{s}"     ),
             Token::Num(n)        => write!(f, "{n}"     ),
-            Token::Str(s)        => write!(f, "{s}"     ),
+            Token::Str(s)        => write!(f, "\"{s}\"" ),
         }
     }
 }
 
-pub fn lexer<'src>(dict: HashSet<String>
+pub fn lexer<'src>(dict: &HashSet<String>
 ) -> impl Parser<'src, &'src str, Vec<Spanned<Token<'src>>>, extra::Err<Rich<'src, char, Span>>> {
 
     // A parser for numbers

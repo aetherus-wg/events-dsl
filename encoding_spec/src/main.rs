@@ -1,0 +1,52 @@
+use anyhow::{Result};
+use encoding_spec::SrcId;
+use encoding_spec::parser::{parse_encodings, resolved_dir_encodings};
+use encoding_spec::pattern::{self, Pattern};
+use encoding_spec::trie::Trie;
+use std::env;
+use std::fs;
+
+fn main() -> Result<()> {
+    env_logger::init();
+
+    let filename = env::args().nth(1).expect("Expected file argument");
+    let src = &fs::read_to_string(&filename).expect("Failed to read file");
+
+    let encodings = parse_encodings(src)?;
+    let dir_encodings = resolved_dir_encodings(&encodings);
+    //println!("Parsed encodings: {:#?}", encodings);
+
+    let mut trie = Trie::new();
+    for encoding in encodings {
+        trie.insert(&encoding);
+    }
+
+    let dot_file = filename.replace(".md", ".dot");
+    let graphviz_dot = trie.emit_dot();
+    std::fs::write(&dot_file, graphviz_dot).expect("Failed to write DOT file");
+
+    for encoding in dir_encodings {
+        trie.insert(&encoding);
+    }
+
+    let dot_file = filename.replace(".md", "_complete.dot");
+    let graphviz_dot = trie.emit_dot();
+    std::fs::write(&dot_file, graphviz_dot).expect("Failed to write DOT file");
+
+    let pattern = Pattern(vec![
+        pattern::Field::Field("MCRT"),
+        pattern::Field::Field("Material"),
+        pattern::Field::Field("Elastic"),
+        //pattern::Field::Field("Mie"),
+        pattern::Field::X,
+        pattern::Field::Field("Forward"),
+        //pattern::Field::X,
+        pattern::Field::SrcId(SrcId::MatId),
+    ]);
+
+    let (bits_match, src_id) = pattern::search_trie(&trie.root, &pattern);
+
+    println!("Bits match for pattern {:?}: {:?} with {}", pattern, bits_match, src_id);
+
+    Ok(())
+}

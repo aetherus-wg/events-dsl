@@ -1,6 +1,6 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
-use log::{debug, error, info, trace};
+use log::{debug, trace};
 
 use crate::{SrcId, bits::BitsMatch, trie::{self, TrieNode}};
 
@@ -14,36 +14,8 @@ pub enum Field<'a> {
 #[derive(Debug)]
 pub struct Pattern<'a>(pub Vec<Field<'a>>);
 
-fn combine_src_id(lhs: &SrcId, rhs: &SrcId) -> Option<SrcId> {
-    let strict_type = match (lhs, rhs) {
-        (SrcId::SrcId,      SrcId::MatSurfId)  => SrcId::MatSurfId,
-        (SrcId::SrcId,      SrcId::MatId)      => SrcId::MatId,
-        (SrcId::SrcId,      SrcId::SurfId)     => SrcId::MatId,
-        (SrcId::SrcId,      SrcId::LightId)    => SrcId::LightId,
-        (SrcId::SrcId,      SrcId::DetectorId) => SrcId::DetectorId,
-        (SrcId::MatSurfId,  SrcId::MatId)      => SrcId::MatId,
-        (SrcId::MatSurfId,  SrcId::SurfId)     => SrcId::SurfId,
-        // The same but in reverse
-        (SrcId::MatSurfId,  SrcId::SrcId)      => SrcId::MatSurfId,
-        (SrcId::MatId,      SrcId::SrcId)      => SrcId::MatId,
-        (SrcId::SurfId,     SrcId::SrcId)      => SrcId::MatId,
-        (SrcId::LightId,    SrcId::SrcId)      => SrcId::LightId,
-        (SrcId::DetectorId, SrcId::SrcId)      => SrcId::DetectorId,
-        (SrcId::MatId,      SrcId::MatSurfId)  => SrcId::MatId,
-        (SrcId::SurfId,     SrcId::MatSurfId)  => SrcId::SurfId,
-        (req, enc) if req == enc => req.clone(),
-        _ => return None,
-    };
-    Some(strict_type)
-}
-
-pub fn search_trie(trie_node: &TrieNode, pattern: &Pattern, attrs_map: &HashMap<String, Vec<String>>) -> (BitsMatch, SrcId) {
+pub fn search_trie(trie_node: &TrieNode, pattern: &Pattern) -> (BitsMatch, SrcId) {
     let mut encodings = Vec::new();
-    // FIXME: bits_match must hold bits range and attribute
-    struct TrieField<'a> {
-        node: &'a TrieNode,
-        hold_x: bool,
-    }
     #[derive(Clone, Hash, PartialEq, Eq)]
     struct StackEntry<'a> {
         node: &'a TrieNode,
@@ -145,7 +117,7 @@ pub fn search_trie(trie_node: &TrieNode, pattern: &Pattern, attrs_map: &HashMap<
             match (pattern_field, child_field) {
                 (Field::SrcId(req_type), trie::Field::SrcId(enc_type)) => {
                     assert!(child_node.is_terminal);
-                    let strict_type = match combine_src_id(req_type, enc_type) {
+                    let strict_type = match req_type.combine(&enc_type) {
                         Some(strict_type) => strict_type,
                         None => {
                             trace!(
@@ -208,7 +180,7 @@ pub fn search_trie(trie_node: &TrieNode, pattern: &Pattern, attrs_map: &HashMap<
     let bits_match = encodings.iter().fold(BitsMatch { mask: 0, value: 0 }, |acc, enc| acc.combine(&enc.0));
 
     let src_id = encodings.iter().fold(SrcId::SrcId, |acc, enc| {
-        match combine_src_id(&acc, &enc.1) {
+        match acc.combine(&enc.1) {
             Some(strict_type) => strict_type,
             None => {
                 panic!(

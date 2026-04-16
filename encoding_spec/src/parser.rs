@@ -1,18 +1,13 @@
 use anyhow::anyhow;
-use anyhow::{Error, Result};
+use anyhow::{Result};
 use markdown_ppp::ast::Block;
-use markdown_ppp::ast::{Document, Inline};
+use markdown_ppp::ast::{Inline};
 use markdown_ppp::parser::MarkdownParserState;
 use markdown_ppp::parser::parse_markdown;
-use md_parse::SrcId;
-use md_parse::bits::{BitsRange, BitsMatch};
-use md_parse::trie::{Encoding, Field, Trie};
-use md_parse::pattern::{self, Pattern};
-use std::collections::HashMap;
-use std::env;
-use std::fs;
-use itertools::Itertools;
+use crate::bits::{BitsRange, BitsMatch};
+use crate::trie::{Encoding, Field};
 use std::str::FromStr;
+use itertools::Itertools;
 
 fn unwrap_inline(inline: &Inline) -> Result<String> {
     match inline {
@@ -21,7 +16,7 @@ fn unwrap_inline(inline: &Inline) -> Result<String> {
     }
 }
 
-fn parse_encodings(src: &str) -> Result<Vec<Encoding>> {
+pub fn parse_encodings(src: &str) -> Result<Vec<Encoding>> {
     let state = MarkdownParserState::new();
     let document = parse_markdown(state, src).unwrap();
 
@@ -82,7 +77,9 @@ fn parse_encodings(src: &str) -> Result<Vec<Encoding>> {
     Ok(encodings)
 }
 
-fn resolved_dir_encodings(encodings: &Vec<Encoding>) -> Vec<Encoding> {
+/// Find Encoding with attribute "Direction" which is specified
+/// and replace all instances for the X (don't care) with the same attribute specified
+pub fn resolved_dir_encodings(encodings: &Vec<Encoding>) -> Vec<Encoding> {
     let dir_fields: Vec<Field> = encodings
         .iter()
         .map(|Encoding(fields_encoding)| fields_encoding)
@@ -119,72 +116,21 @@ fn resolved_dir_encodings(encodings: &Vec<Encoding>) -> Vec<Encoding> {
                 }})
         })
         .collect()
-    //if let Some(pos) = fields_encoding
-    //    .iter()
-    //    .position(|field| matches!(
-    //        field,
-    //        Field::X{ attr, size: _} if attr.as_deref() == Some("Direction")
-    //    ))
-    //{
-    //    let mut new_encoding = fields_encoding.clone();
-    //    new_encoding[pos] = Field::Named { name: "Forward".to_string(), attr: Some("Direction".to_string()), bits: BitsMatch{mask: 0, value: 0}, size: 2};
-    //    encodings.push(Encoding(new_encoding));
-    //}
 }
 
-fn main() -> Result<()> {
-
-    env_logger::init();
-
-    let filename = env::args().nth(1).expect("Expected file argument");
-    let src = &fs::read_to_string(&filename).expect("Failed to read file");
-
-    let encodings = parse_encodings(src)?;
-    let dir_encodings = resolved_dir_encodings(&encodings);
-    //println!("Parsed encodings: {:#?}", encodings);
-
-    let mut trie = Trie::new();
-    for encoding in encodings {
-        trie.insert(&encoding);
-    }
-
-    let dot_file = filename.replace(".md", ".dot");
-    let graphviz_dot = trie.emit_dot();
-    std::fs::write(&dot_file, graphviz_dot).expect("Failed to write DOT file");
-
-    for encoding in dir_encodings {
-        trie.insert(&encoding);
-    }
-
-    let dot_file = filename.replace(".md", "_complete.dot");
-    let graphviz_dot = trie.emit_dot();
-    std::fs::write(&dot_file, graphviz_dot).expect("Failed to write DOT file");
-
-    let pattern = Pattern(vec![
-        pattern::Field::Field("MCRT"),
-        pattern::Field::Field("Material"),
-        pattern::Field::Field("Elastic"),
-        //pattern::Field::Field("Mie"),
-        pattern::Field::X,
-        pattern::Field::Field("Forward"),
-        //pattern::Field::X,
-        pattern::Field::SrcId(SrcId::MatId),
-    ]);
-
-    let attrs_map = HashMap::from([
-        (
-            "Direction".to_string(),
-            vec!["Forward".to_string(),
-                 "Backward".to_string(),
-                 "Side".to_string(),
-                 "Unknown".to_string(),
-            ]
-        ),
-    ]);
-
-    let (bits_match, src_id) = pattern::search_trie(&trie.root, &pattern, &attrs_map);
-
-    println!("Bits match for pattern {:?}: {:?} with {}", pattern, bits_match, src_id);
-
-    Ok(())
+/// Get a list of all field names from the encoding definiton, which can be supplied
+/// to the DSL parser as valid FieldId names
+pub fn extract_fields(encodings: &Vec<Encoding>) -> Vec<String> {
+    encodings
+        .iter()
+        .flat_map(|Encoding(fields_encoding)| {
+            fields_encoding.iter().filter_map(|field|
+                match field {
+                    Field::Named{name, attr: _, bits: _, size: _} => Some(name.clone()),
+                    _ => None,
+                }
+            )
+        })
+        .unique()
+        .collect()
 }
