@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use anyhow::{anyhow, Result};
 
 use chumsky::prelude::*;
 
@@ -30,9 +31,10 @@ pub enum SrcId<'src>
 
 macro_rules! get_src_id {
     ($subt:ident, $name:expr, $dict:expr) => {
-        $dict.get(&SrcName::$subt($name))
-            .unwrap_or_else(|| panic!("Unknown source name: {}", $name))
-            .clone()
+        match $dict.get(&SrcName::$subt($name)) {
+            Some(src_id) => Ok(src_id.clone()),
+            None => Err(anyhow!("Unknown source name: {}(\"{}\")", stringify!($subt), $name)),
+        }
     };
 }
 
@@ -57,20 +59,20 @@ impl<'a> SrcId<'a> {
             _ => panic!("Unknown source id type: {}", src_id_type),
         }
     }
-    pub fn resolve(&self, dict: &HashMap<SrcName, DomainSrcId>) -> DomainSrcId {
-        match self {
+    pub fn resolve(&self, dict: &HashMap<SrcName, DomainSrcId>) -> Result<DomainSrcId> {
+        Ok(match self {
             Self::None            => DomainSrcId::None,
             Self::Mat(n)          => DomainSrcId::Mat(*n),
             Self::Surf(n)         => DomainSrcId::Surf(*n),
             Self::MatSurf(n)      => DomainSrcId::MatSurf(*n),
             Self::Light(n)        => DomainSrcId::Light(*n),
             Self::Detector(n)     => DomainSrcId::Detector(*n),
-            Self::MatName(n)      => get_src_id!(Mat, n.to_string(), dict),
-            Self::SurfName(n)     => get_src_id!(Surf, n.to_string(), dict),
-            Self::MatSurfName(n)  => get_src_id!(MatSurf, n.to_string(), dict),
-            Self::LightName(n)    => get_src_id!(Light, n.to_string(), dict),
-            Self::DetectorName(n) => get_src_id!(Detector, n.to_string(), dict),
-        }
+            Self::MatName(n)      => get_src_id!(Mat, n.to_string(), dict)?,
+            Self::SurfName(n)     => get_src_id!(Surf, n.to_string(), dict)?,
+            Self::MatSurfName(n)  => get_src_id!(MatSurf, n.to_string(), dict)?,
+            Self::LightName(n)    => get_src_id!(Light, n.to_string(), dict)?,
+            Self::DetectorName(n) => get_src_id!(Detector, n.to_string(), dict)?,
+        })
     }
 }
 
@@ -105,8 +107,19 @@ pub enum Expr<'src> {
 }
 
 #[derive(Debug)]
+pub enum DeclType {
+    SrcId,
+    Pattern,
+    Sequence,
+    Rule,
+    LedgerPath,
+    PhotonsPath,
+}
+
+#[derive(Debug)]
 pub struct Declaration<'src> {
     pub name: &'src str,
+    pub decl_type: DeclType,
     pub span: Span,
     pub body: Spanned<Expr<'src>>,
 }

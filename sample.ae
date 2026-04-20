@@ -1,5 +1,5 @@
 # This is an example of the aetherus-events Domain-Specific Language (DSL)
-# used to easilty define patterns and sequences of interested
+# used to easily define patterns and sequences of interested
 
 
 # Define material and surface identifiers we want to match for

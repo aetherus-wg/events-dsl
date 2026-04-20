@@ -1,9 +1,65 @@
-use std::{env, fmt, fs};
+use std::{collections::HashMap, env, fmt, fs, path::Path};
+use aetherus_events::{ledger, reader::read_ledger};
 use ariadne::{sources, Color, Label, Report, ReportKind};
-use filter_dsl::{parse::expr_parser, token::lexer};
+use env_logger::Env;
+use filter_dsl::{ast::{Declaration, Expr}, model::resolve_ast, parse::expr_parser, token::lexer};
 use itertools::Itertools;
 
 use chumsky::prelude::*;
+use log::{debug, info};
+
+pub fn extract_ledger_path(declarations: &Vec<Declaration>, script_src: &str, script_filepath: &Path) -> Option<std::path::PathBuf> {
+    let script_dirname = &script_filepath.parent().unwrap_or_else(|| std::path::Path::new("."));
+    let mut ledger_path = None;
+    for decl in declarations.iter() {
+        match decl.body {
+            (Expr::LedgerPath(path), span) => {
+                if let Some((_, first_span)) = ledger_path {
+                        failure("Multiple ledger/photons paths specified".to_string(),
+                        ("another declaration here".to_string(), span),
+                        [("first declaration here".to_string(), first_span)],
+                        script_src,
+                    );
+                } else {
+                    ledger_path = Some((script_dirname.join(path), span));
+                }
+            },
+            _                           => (),
+        }
+    }
+
+    match ledger_path {
+        Some((path, _)) => Some(path),
+        None => None,
+    }
+}
+
+pub fn extract_photons_path(declarations: &Vec<Declaration>, script_src: &str, script_filepath: &Path) -> Option<std::path::PathBuf> {
+    let script_dirname = &script_filepath.parent().unwrap_or_else(|| std::path::Path::new("."));
+    let mut photons_path = None;
+    for decl in declarations.iter() {
+        match decl.body {
+            (Expr::PhotonsPath(path), span) => {
+                if let Some((_, first_span)) = photons_path {
+                        failure("Multiple photons paths specified".to_string(),
+                        ("another declaration here".to_string(), span),
+                        [("first declaration here".to_string(), first_span)],
+                        script_src,
+                    );
+                } else {
+                    photons_path = Some((script_dirname.join(path), span));
+                }
+            },
+            _                           => (),
+        }
+    }
+
+    match photons_path {
+        Some((path, _)) => Some(path),
+        None => None,
+    }
+}
+
 
 // -----------------------------------------------
 // Parsing helpers
@@ -51,24 +107,26 @@ fn parse_failure(err: &Rich<impl fmt::Display>, src: &str) -> ! {
 }
 
 fn main() {
+    env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
+
     let encoding_filename = env::args().nth(1).expect("Expected file argument for encoding scheme");
     let encoding_src = &fs::read_to_string(&encoding_filename).expect("Failed to read encoding scheme file");
 
-    let script_filename = env::args().nth(2).expect("Expected file argument for DSL script");
-    let script_src = &fs::read_to_string(&script_filename).expect("Failed to read script file");
+    let script_arg = env::args().nth(2).expect("Expected file argument for DSL script");
+    let script_filepath = Path::new(&script_arg);
+    let script_src = &fs::read_to_string(&script_filepath).expect("Failed to read script file");
 
     let trie = encoding_spec::build_decoder(encoding_src).expect("Failed to build decoder from encoding scheme");
 
     let dict = trie.get_fields();
-    println!("FieldId dictionary: {:?}", dict);
+    info!("FieldId dictionary: {:?}", dict);
 
     let tokens = lexer(&dict)
         .parse(script_src)
         .into_result()
         .unwrap_or_else(|errs| parse_failure(&errs[0], script_src));
 
-    println!("Tokens: {}", tokens.iter().map(|t| t.0.to_string()).join(" "));
-    //println!("Tokens: {:?}", tokens);
+    debug!("Tokens: {}", tokens.iter().map(|t| t.0.to_string()).join(" "));
 
     let declarations = expr_parser()
         .parse(
@@ -80,4 +138,23 @@ fn main() {
         .unwrap_or_else(|errs| parse_failure(&errs[0], script_src));
 
     //println!("Declarations: {:?}", declarations);
+
+    let ledger_path = extract_ledger_path(&declarations, script_src, script_filepath);
+
+    let photons_path = extract_photons_path(&declarations, script_src, script_filepath);
+
+    info!("Start resolving with ledger={:?}, photons={:?}", ledger_path, photons_path);
+
+    let ledger = read_ledger(&ledger_path.unwrap()).expect("Failed to read ledger file");
+
+    let src_dict = ledger.get_src_dict();
+
+    info!("SrcId dictionary from ledger: {:?}", src_dict);
+
+    let rules = resolve_ast(&declarations, &src_dict, &trie).expect("Failed to resolve AST into rules");
+
+    info!("Finished resolving with Rules: {:#?}",
+        rules.iter().map(|(key, _val)| key.to_string()).collect::<Vec<_>>()
+    );
+
 }

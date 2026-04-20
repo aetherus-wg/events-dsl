@@ -50,19 +50,21 @@ impl Display for SrcId {
 impl SrcId {
     pub fn combine(&self, other: &SrcId) -> Option<SrcId> {
         Some(match (self, other) {
-            (SrcId::SrcId,      SrcId::MatSurfId)  => SrcId::MatSurfId,
-            (SrcId::SrcId,      SrcId::MatId)      => SrcId::MatId,
-            (SrcId::SrcId,      SrcId::SurfId)     => SrcId::MatId,
-            (SrcId::SrcId,      SrcId::LightId)    => SrcId::LightId,
+            (SrcId::SrcId,      SrcId::MatSurfId ) => SrcId::MatSurfId,
+            (SrcId::SrcId,      SrcId::MatId     ) => SrcId::MatId,
+            (SrcId::SrcId,      SrcId::SurfId    ) => SrcId::MatId,
+            (SrcId::SrcId,      SrcId::LightId   ) => SrcId::LightId,
             (SrcId::SrcId,      SrcId::DetectorId) => SrcId::DetectorId,
-            (SrcId::MatSurfId,  SrcId::MatId)      => SrcId::MatId,
-            (SrcId::MatSurfId,  SrcId::SurfId)     => SrcId::SurfId,
+            (SrcId::MatSurfId,  SrcId::MatId     ) => SrcId::MatId,
+            (SrcId::MatSurfId,  SrcId::SurfId    ) => SrcId::SurfId,
             // The same but in reverse
-            (SrcId::MatSurfId,  SrcId::SrcId)      => SrcId::MatSurfId,
-            (SrcId::MatId,      SrcId::SrcId)      => SrcId::MatId,
-            (SrcId::SurfId,     SrcId::SrcId)      => SrcId::MatId,
-            (SrcId::LightId,    SrcId::SrcId)      => SrcId::LightId,
-            (SrcId::DetectorId, SrcId::SrcId)      => SrcId::DetectorId,
+            (SrcId::MatSurfId,  SrcId::SrcId     ) => SrcId::MatSurfId,
+            (SrcId::MatId,      SrcId::SrcId     ) => SrcId::MatId,
+            (SrcId::SurfId,     SrcId::SrcId     ) => SrcId::MatId,
+            (SrcId::LightId,    SrcId::SrcId     ) => SrcId::LightId,
+            (SrcId::DetectorId, SrcId::SrcId     ) => SrcId::DetectorId,
+            (SrcId::MatId,      SrcId::MatSurfId ) => SrcId::MatId,
+            (SrcId::SurfId,     SrcId::MatSurfId ) => SrcId::SurfId,
             (lhs, rhs) if lhs == rhs => lhs.clone(),
             _ => return None,
         })
