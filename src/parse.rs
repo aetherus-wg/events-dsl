@@ -192,6 +192,24 @@ where
             .map_with(|items, e| (Expr::Seq(items), e.span()))
     }).labelled("sequence");
 
+    let decl_ledger = just(Token::Ledger)
+        .ignore_then(just(Token::Ctrl('=')))
+        .ignore_then(select!{Token::Str(path) => path}.map_with(|path, e| (Expr::LedgerPath(path), e.span())))
+        .map_with(|expr, e| Declaration {
+            name: "ledger",
+            span: e.span(),
+            body: expr,
+        });
+
+    let decl_photons = just(Token::Photons)
+        .ignore_then(just(Token::Ctrl('=')))
+        .ignore_then(select!{Token::Str(path) => path}.map_with(|path, e| (Expr::PhotonsPath(path), e.span())))
+        .map_with(|expr, e| Declaration {
+            name: "photons",
+            span: e.span(),
+            body: expr,
+        });
+
     let decl_src = just(Token::SrcDecl)
         .ignore_then(select!{Token::Ident(ident) => ident})
         .then_ignore(just(Token::Ctrl('=')))
@@ -248,7 +266,9 @@ where
     let decl = decl_src
         .or(decl_seq)
         .or(decl_pattern)
-        .or(decl_rule);
+        .or(decl_rule)
+        .or(decl_ledger)
+        .or(decl_photons);
 
     decl.repeated().at_least(1).collect::<Vec<_>>()
 }

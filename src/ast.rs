@@ -91,6 +91,8 @@ pub enum Expr<'src> {
     X,
     Ident(&'src str),
     Field(&'src str),
+    LedgerPath(&'src str),
+    PhotonsPath(&'src str),
     Any(Vec<Spanned<Self>>),
 
     Not(Box<Spanned<Self>>),

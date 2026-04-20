@@ -42,6 +42,8 @@ pub enum Token<'src> {
     SrcId(&'src str),
     Str(&'src str),
     Num(u16),
+    Ledger,
+    Photons,
 }
 
 impl fmt::Display for Token<'_> {
@@ -63,6 +65,8 @@ impl fmt::Display for Token<'_> {
             Token::SrcId(s)      => write!(f, "{s}"     ),
             Token::Num(n)        => write!(f, "{n}"     ),
             Token::Str(s)        => write!(f, "\"{s}\"" ),
+            Token::Ledger        => write!(f, "ledger"  ),
+            Token::Photons       => write!(f, "photons" ),
         }
     }
 }
@@ -102,13 +106,16 @@ pub fn lexer<'src>(dict: &HashSet<String>
 
     // A parser for identifiers and keywords
     let keyword =
-               text::ascii::keyword("src"     ).to(Token::SrcDecl)
+               text::ascii::keyword("src"     ).to(Token::SrcDecl    )
            .or(text::ascii::keyword("pattern" ).to(Token::PatternDecl))
-           .or(text::ascii::keyword("sequence").to(Token::SeqDecl))
-           .or(text::ascii::keyword("rule"    ).to(Token::RuleDecl))
-           .or(text::ascii::keyword("any"     ).to(Token::Any))
-           .or(text::ascii::keyword("perm"    ).to(Token::Perm))
-           .or(text::ascii::keyword("seq"     ).to(Token::Seq));
+           .or(text::ascii::keyword("sequence").to(Token::SeqDecl    ))
+           .or(text::ascii::keyword("rule"    ).to(Token::RuleDecl   ))
+           .or(text::ascii::keyword("any"     ).to(Token::Any        ))
+           .or(text::ascii::keyword("perm"    ).to(Token::Perm       ))
+           .or(text::ascii::keyword("seq"     ).to(Token::Seq        ))
+           .or(text::ascii::keyword("ledger"  ).to(Token::Ledger     ))
+           .or(text::ascii::keyword("photons" ).to(Token::Photons    ));
+
 
     let src_id = text::ascii::keyword("Mat")
         .or(text::ascii::keyword("MatSurf"))
