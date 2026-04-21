@@ -214,16 +214,16 @@ where
         .labelled("ledger path declaration")
         .boxed();
 
-    let decl_photons = just(Token::Photons)
+    let decl_signals = just(Token::Signals)
         .ignore_then(just(Token::Ctrl('=')))
-        .ignore_then(select!{Token::Str(path) => path}.map_with(|path, e| (Expr::PhotonsPath(path), e.span())))
+        .ignore_then(select!{Token::Str(path) => path}.map_with(|path, e| (Expr::SignalsPath(path), e.span())))
         .map_with(|expr, e| Declaration {
-            name: "photons",
-            decl_type: DeclType::PhotonsPath,
+            name: "signals",
+            decl_type: DeclType::SignalsPath,
             span: e.span(),
             body: expr,
         })
-        .labelled("photons path declaration")
+        .labelled("signals path declaration")
         .boxed();
 
     let decl_src = just(Token::SrcDecl)
@@ -292,7 +292,7 @@ where
         .or(decl_pattern)
         .or(decl_rule)
         .or(decl_ledger)
-        .or(decl_photons);
+        .or(decl_signals);
 
     decl.repeated().at_least(1).collect::<Vec<_>>()
 }

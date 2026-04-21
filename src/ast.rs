@@ -94,7 +94,7 @@ pub enum Expr<'src> {
     Ident(&'src str),
     Field(&'src str),
     LedgerPath(&'src str),
-    PhotonsPath(&'src str),
+    SignalsPath(&'src str),
     Any(Vec<Spanned<Self>>),
 
     Not(Box<Spanned<Self>>),
@@ -113,7 +113,7 @@ pub enum DeclType {
     Sequence,
     Rule,
     LedgerPath,
-    PhotonsPath,
+    SignalsPath,
 }
 
 #[derive(Debug)]

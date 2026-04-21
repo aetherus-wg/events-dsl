@@ -43,7 +43,7 @@ pub enum Token<'src> {
     Str(&'src str),
     Num(u16),
     Ledger,
-    Photons,
+    Signals,
 }
 
 impl fmt::Display for Token<'_> {
@@ -66,7 +66,7 @@ impl fmt::Display for Token<'_> {
             Token::Num(n)        => write!(f, "{n}"     ),
             Token::Str(s)        => write!(f, "\"{s}\"" ),
             Token::Ledger        => write!(f, "ledger"  ),
-            Token::Photons       => write!(f, "photons" ),
+            Token::Signals       => write!(f, "signals" ),
         }
     }
 }
@@ -114,7 +114,7 @@ pub fn lexer<'src>(dict: &HashSet<String>
            .or(text::ascii::keyword("perm"    ).to(Token::Perm       ))
            .or(text::ascii::keyword("seq"     ).to(Token::Seq        ))
            .or(text::ascii::keyword("ledger"  ).to(Token::Ledger     ))
-           .or(text::ascii::keyword("photons" ).to(Token::Photons    ));
+           .or(text::ascii::keyword("signals" ).to(Token::Signals    ));
 
 
     let src_id = text::ascii::keyword("Mat")

@@ -77,6 +77,101 @@ impl Into<encoding_spec::SrcId> for SrcId<'_> {
     }
 }
 
+
+#[derive(Debug)]
+pub enum Value<'src, T>
+{
+    X,
+    Ident(&'src str),
+    Primitive(T),
+    // NOTE: There is no reason to support nested "any" since it trivially flattens
+    Any(Vec<Self>),
+    Not(Box<Self>),
+}
+
+// Sequence Tree
+#[derive(Debug, Clone)]
+pub enum SeqTree {
+    Pattern(Match),
+    Not(Match),
+    Repeat(Repetition, Box<Self>),
+    // TODO: Enable permutations with splatting (Julia nomenclature)
+    Perm(Vec<Self>),
+    Seq(Vec<Self>),
+}
+
+#[derive(Debug)]
+pub enum Rule {
+    Pattern(Match),
+    Repeat(Repetition, Box<Self>),
+    Seq(SeqTree),
+    Rule(Vec<Rule>),
+}
+
+// -------------------------------------------------
+// Processing AST into Semantics Model
+// -------------------------------------------------
+pub fn resolve_ast(
+      declarations: &Vec<Declaration>,
+      src_dict: &HashMap<SrcName, DomainSrcId>,
+      trie: &Trie,
+) -> Result<HashMap<String, Rule>>
+{
+    let mut resolved_src_dict = HashMap::new();
+    for decl in declarations.iter() {
+        let (expr, span) = &decl.body;
+        match &decl.decl_type {
+            DeclType::SrcId => {
+                let resolved_src_id = expr.resolve_src(&src_dict).expect("Failed to resolve source identifier");
+                debug!("Resolved {:?} into: {:?}", expr, resolved_src_id);
+                resolved_src_dict.insert(decl.name, resolved_src_id);
+            },
+            _ => (),
+        }
+    }
+
+    let mut resolved_pattern_dict = HashMap::new();
+    for decl in declarations.iter() {
+        let (expr, span) = &decl.body;
+        match &decl.decl_type {
+            DeclType::Pattern => {
+                let resolved_pattern = expr.resolve_pattern(&src_dict, &trie, &resolved_src_dict).context("Failed to resolve pattern")?;
+                debug!("Resolved {:?} into: {:?}", expr, resolved_pattern);
+                resolved_pattern_dict.insert(decl.name, resolved_pattern);
+            },
+            _ => (),
+        }
+    }
+
+    let mut resolved_seq_dict = HashMap::new();
+    for decl in declarations.iter() {
+        let (expr, span) = &decl.body;
+        match &decl.decl_type {
+            DeclType::Sequence => {
+                let resolved_seq = expr.resolve_seq(&src_dict, &trie, &resolved_src_dict, &resolved_pattern_dict).context("Failed to resolve sequence")?;
+                debug!("Resolved {:?} into: {:?}", expr, resolved_seq);
+                resolved_seq_dict.insert(decl.name, resolved_seq);
+            },
+            _ => (),
+        }
+    }
+
+    let mut resolved_rule_dict = HashMap::new();
+    for decl in declarations.iter() {
+        let (expr, span) = &decl.body;
+        match &decl.decl_type {
+            DeclType::Rule => {
+                let resolved_rule = expr.resolve_rule(&src_dict, &trie, &resolved_src_dict, &resolved_pattern_dict, &resolved_seq_dict).context("Failed to resolve rule")?;
+                debug!("Resolved {:?} into: {:?}", expr, resolved_rule);
+                resolved_rule_dict.insert(decl.name.to_owned(), resolved_rule);
+            },
+            _ => (),
+        }
+    }
+
+    Ok(resolved_rule_dict)
+}
+
 impl<'src> Expr<'src> {
     pub fn resolve_src(&self, src_dict: &HashMap<SrcName, DomainSrcId>) -> Result<(encoding_spec::SrcId, Match)> {
         Ok(
@@ -260,98 +355,4 @@ impl<'src> Expr<'src> {
             _ => return Err(anyhow!("Unexpected expression type for resolving rule: {:?}", self)),
         })
     }
-}
-
-#[derive(Debug)]
-pub enum Value<'src, T>
-{
-    X,
-    Ident(&'src str),
-    Primitive(T),
-    // NOTE: There is no reason to support nested "any" since it trivially flattens
-    Any(Vec<Self>),
-    Not(Box<Self>),
-}
-
-// Sequence Tree
-#[derive(Debug, Clone)]
-pub enum SeqTree {
-    Pattern(Match),
-    Not(Match),
-    Repeat(Repetition, Box<Self>),
-    // TODO: Enable permutations with splatting (Julia nomenclature)
-    Perm(Vec<Self>),
-    Seq(Vec<Self>),
-}
-
-#[derive(Debug)]
-pub enum Rule {
-    Pattern(Match),
-    Repeat(Repetition, Box<Self>),
-    Seq(SeqTree),
-    Rule(Vec<Rule>),
-}
-
-// -------------------------------------------------
-// Processing AST into Semantics Model
-// -------------------------------------------------
-pub fn resolve_ast(
-      declarations: &Vec<Declaration>,
-      src_dict: &HashMap<SrcName, DomainSrcId>,
-      trie: &Trie,
-) -> Result<HashMap<String, Rule>>
-{
-    let mut resolved_src_dict = HashMap::new();
-    for decl in declarations.iter() {
-        let (expr, span) = &decl.body;
-        match &decl.decl_type {
-            DeclType::SrcId => {
-                let resolved_src_id = expr.resolve_src(&src_dict).expect("Failed to resolve source identifier");
-                debug!("Resolved {:?} into: {:?}", expr, resolved_src_id);
-                resolved_src_dict.insert(decl.name, resolved_src_id);
-            },
-            _ => (),
-        }
-    }
-
-    let mut resolved_pattern_dict = HashMap::new();
-    for decl in declarations.iter() {
-        let (expr, span) = &decl.body;
-        match &decl.decl_type {
-            DeclType::Pattern => {
-                let resolved_pattern = expr.resolve_pattern(&src_dict, &trie, &resolved_src_dict).context("Failed to resolve pattern")?;
-                debug!("Resolved {:?} into: {:?}", expr, resolved_pattern);
-                resolved_pattern_dict.insert(decl.name, resolved_pattern);
-            },
-            _ => (),
-        }
-    }
-
-    let mut resolved_seq_dict = HashMap::new();
-    for decl in declarations.iter() {
-        let (expr, span) = &decl.body;
-        match &decl.decl_type {
-            DeclType::Sequence => {
-                let resolved_seq = expr.resolve_seq(&src_dict, &trie, &resolved_src_dict, &resolved_pattern_dict).context("Failed to resolve sequence")?;
-                debug!("Resolved {:?} into: {:?}", expr, resolved_seq);
-                resolved_seq_dict.insert(decl.name, resolved_seq);
-            },
-            _ => (),
-        }
-    }
-
-    let mut resolved_rule_dict = HashMap::new();
-    for decl in declarations.iter() {
-        let (expr, span) = &decl.body;
-        match &decl.decl_type {
-            DeclType::Rule => {
-                let resolved_rule = expr.resolve_rule(&src_dict, &trie, &resolved_src_dict, &resolved_pattern_dict, &resolved_seq_dict).context("Failed to resolve rule")?;
-                debug!("Resolved {:?} into: {:?}", expr, resolved_rule);
-                resolved_rule_dict.insert(decl.name.to_owned(), resolved_rule);
-            },
-            _ => (),
-        }
-    }
-
-    Ok(resolved_rule_dict)
 }

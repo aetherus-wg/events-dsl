@@ -1,5 +1,5 @@
-use std::{collections::HashMap, env, fmt, fs, path::Path};
-use aetherus_events::{ledger, reader::read_ledger};
+use std::{env, fmt, fs, path::Path};
+use aetherus_events::{reader::read_ledger};
 use ariadne::{sources, Color, Label, Report, ReportKind};
 use env_logger::Env;
 use filter_dsl::{ast::{Declaration, Expr}, model::resolve_ast, parse::expr_parser, token::lexer};
@@ -34,27 +34,27 @@ pub fn extract_ledger_path(declarations: &Vec<Declaration>, script_src: &str, sc
     }
 }
 
-pub fn extract_photons_path(declarations: &Vec<Declaration>, script_src: &str, script_filepath: &Path) -> Option<std::path::PathBuf> {
+pub fn extract_signals_path(declarations: &Vec<Declaration>, script_src: &str, script_filepath: &Path) -> Option<std::path::PathBuf> {
     let script_dirname = &script_filepath.parent().unwrap_or_else(|| std::path::Path::new("."));
-    let mut photons_path = None;
+    let mut signals_path = None;
     for decl in declarations.iter() {
         match decl.body {
-            (Expr::PhotonsPath(path), span) => {
-                if let Some((_, first_span)) = photons_path {
-                        failure("Multiple photons paths specified".to_string(),
+            (Expr::SignalsPath(path), span) => {
+                if let Some((_, first_span)) = signals_path {
+                        failure("Multiple signals paths specified".to_string(),
                         ("another declaration here".to_string(), span),
                         [("first declaration here".to_string(), first_span)],
                         script_src,
                     );
                 } else {
-                    photons_path = Some((script_dirname.join(path), span));
+                    signals_path = Some((script_dirname.join(path), span));
                 }
             },
             _                           => (),
         }
     }
 
-    match photons_path {
+    match signals_path {
         Some((path, _)) => Some(path),
         None => None,
     }
@@ -141,9 +141,9 @@ fn main() {
 
     let ledger_path = extract_ledger_path(&declarations, script_src, script_filepath);
 
-    let photons_path = extract_photons_path(&declarations, script_src, script_filepath);
+    let signals_path = extract_signals_path(&declarations, script_src, script_filepath);
 
-    info!("Start resolving with ledger={:?}, photons={:?}", ledger_path, photons_path);
+    info!("Start resolving with ledger={:?}, signals={:?}", ledger_path, signals_path);
 
     let ledger = read_ledger(&ledger_path.unwrap()).expect("Failed to read ledger file");
 
