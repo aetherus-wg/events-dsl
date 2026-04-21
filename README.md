@@ -55,3 +55,11 @@ sequence.
 - [chumsky](https://docs.rs/chumsky/latest/chumsky/index.html)
 - [pest](pest.rs)
 - [Bachus-Naur Form](https://en.wikipedia.org/wiki/Backus%E2%80%93Naur_form)
+
+## TODO
+
+- [X] Vim syntax highlight
+- [ ] Tree-sitter parser and syntax highlight
+  - [tree-sitter docs](https://tree-sitter.github.io/tree-sitter/)
+  - [contributing
+  language](https://github.com/nvim-treesitter/nvim-treesitter/blob/main/CONTRIBUTING.md#Parsers)
