@@ -150,11 +150,10 @@ where
         .labelled("pattern value")
         .boxed();
 
-    let predicated_pattern = just(Token::Predicates('!'))
+    let neg_pattern = just(Token::Predicates('!'))
         .ignore_then(pattern_value.clone())
         .map_with(|p, e| (Expr::Not(Box::new(p)), e.span()))
-        .labelled("predicated pattern")
-        .or(pattern_value.clone());
+        .labelled("negated pattern");
 
     let repetition = select! {
             Token::Predicates('*') => Repetition::ZeroOrMore,
@@ -163,10 +162,10 @@ where
         }
         .or(
             just(Token::Ctrl('{'))
-                .ignore_then(select! { Token::Num(n) => n }.or_not())
+                .ignore_then(select! { Token::Num(n) => n as usize }.or_not())
                 .then(
                     just(Token::Ctrl(','))
-                        .ignore_then(select! { Token::Num(m) => m }.or_not())
+                        .ignore_then(select! { Token::Num(m) => m as usize }.or_not())
                         .or_not()
                 )
                 .then_ignore(just(Token::Ctrl('}')))
@@ -181,15 +180,19 @@ where
         .labelled("repetition operator");
 
     let repetition_pattern = repetition
-        .then(predicated_pattern.clone())
+        .then(pattern_value.clone())
         .map_with(|(r, p), e| (Expr::Repeat(r, Box::new(p)), e.span()))
-        .labelled("repetition pattern")
-        .or(predicated_pattern.map_with(|p, e| (Expr::Repeat(Repetition::Unit, Box::new(p)), e.span())))
+        .labelled("repetition pattern");
+
+    let predicated_pattern = repetition_pattern
+        .or(neg_pattern.clone())
+        .labelled("predicated pattern")
+        .or(pattern_value.clone())
         .boxed();
 
 
     let seq = recursive(|seq|{
-        let seq_items = repetition_pattern.clone()
+        let seq_items = predicated_pattern.clone()
             .or(seq.clone())
             .separated_by(just(Token::Ctrl(',')))
             .allow_trailing()
@@ -265,7 +268,7 @@ where
         .labelled("sequence declaration")
         .boxed();
 
-    let condition = repetition_pattern.clone()
+    let condition = predicated_pattern.clone()
         .or(seq);
 
     let condition_items = condition
