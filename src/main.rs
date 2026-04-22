@@ -2,7 +2,7 @@ use std::{env, fmt, fs, path::Path};
 use aetherus_events::{reader::read_ledger};
 use ariadne::{sources, Color, Label, Report, ReportKind};
 use env_logger::Env;
-use filter_dsl::{ast::{Declaration, Expr}, model::resolve_ast, parse::expr_parser, token::lexer};
+use filter_dsl::{ast::{Declaration, Expr}, model::{find_forward_uid_rule, resolve_ast}, parse::expr_parser, token::lexer};
 use itertools::Itertools;
 
 use chumsky::prelude::*;
@@ -157,4 +157,9 @@ fn main() {
         rules.iter().map(|(key, _val)| key.to_string()).collect::<Vec<_>>()
     );
 
+    for (rule_name, rule) in rules.iter() {
+        println!("Rule: {rule_name}");
+        let uids = find_forward_uid_rule(&ledger, rule);
+        println!("Found UIDS: {:#?}", uids);
+    }
 }

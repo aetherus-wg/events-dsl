@@ -33,6 +33,12 @@ pub struct BitsMatch {
     pub value: u32,
 }
 
+impl BitsMatch {
+    pub fn check(&self, event_encoded: u32) -> bool {
+        self.mask & event_encoded == self.value
+    }
+}
+
 impl From<aetherus_events::filter::BitsMatch> for BitsMatch {
     fn from(other: aetherus_events::filter::BitsMatch) -> Self {
         BitsMatch { mask: other.mask, value: other.value }

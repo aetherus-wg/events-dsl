@@ -76,16 +76,48 @@ impl<'a> SrcId<'a> {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Repetition {
     Unit,         // '' Pass-through, no repetition = {1,1}
     Optional,     // '?' = {0,1}
     OneOrMore,    // '+' = {1,}
     ZeroOrMore,   // '*' = {0,}
-    NTimes(u16),  // '{n}' = {n,n}
-    AtLeast(u16), //'{n,}': + = {1,}, * = {0,}
-    AtMost(u16),  // '{,m}' = {0,m}
-    Interval(u16, u16), // '{n,m}': ? = {0,1}
+    NTimes(usize),  // '{n}' = {n,n}
+    AtLeast(usize), //'{n,}': + = {1,}, * = {0,}
+    AtMost(usize),  // '{,m}' = {0,m}
+    Interval(usize, usize), // '{n,m}': ? = {0,1}
+}
+
+impl Repetition {
+    pub fn min(&self) -> usize {
+        match self {
+            Self::Unit => 1,
+            Self::Optional => 0,
+            Self::OneOrMore => 1,
+            Self::ZeroOrMore => 0,
+            Self::NTimes(n) => *n,
+            Self::AtLeast(n) => *n,
+            Self::AtMost(_) => 0,
+            Self::Interval(n, _) => *n,
+        }
+    }
+    pub fn max(&self) -> Option<usize> {
+        match self {
+            Self::Unit => Some(1),
+            Self::Optional => Some(1),
+            Self::OneOrMore => None,
+            Self::ZeroOrMore => None,
+            Self::NTimes(n) => Some(*n),
+            Self::AtLeast(_) => None,
+            Self::AtMost(m) => Some(*m),
+            Self::Interval(_, m) => Some(*m),
+        }
+    }
+    pub fn check(&self, count: usize) -> bool {
+        let min = self.min();
+        let max = self.max();
+        count >= min && max.map_or(true, |max| count <= max)
+    }
 }
 
 #[derive(Debug, Clone)]
