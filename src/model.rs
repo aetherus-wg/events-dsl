@@ -648,8 +648,11 @@ pub fn find_forward_uid_rule(ledger: &Ledger, rule: &Rule) -> Vec<Uid> {
 
             if remove {
                 rule.conds.remove(rule.cond_idx);
+                if rule.conds.len() == cond_idx {
+                    rule.cond_idx = 0;
+                }
             } else {
-                if rule.cond_idx + 1 >= rule.conds.len() {
+                if rule.cond_idx + 1 == rule.conds.len() {
                     rule.cond_idx = 0;
                 } else {
                     rule.cond_idx = rule.cond_idx + 1;
@@ -671,7 +674,9 @@ pub fn find_forward_uid_rule(ledger: &Ledger, rule: &Rule) -> Vec<Uid> {
                     }
                     if next_uids.is_empty() && rule.satfisfied() {
                         //println!("Found a match for rule with UID: {:?}", rule.uid);
-                        found_uids.push(rule.uid);
+                        if !found_uids.contains(&rule.uid) {
+                            found_uids.push(rule.uid);
+                        }
                     }
                 } else {
                     stack.push(bifurcated_rule);
@@ -684,7 +689,9 @@ pub fn find_forward_uid_rule(ledger: &Ledger, rule: &Rule) -> Vec<Uid> {
                 }
                 if next_uids.is_empty() && rule.satfisfied() {
                     //println!("Found a match for rule with UID: {:?}", rule.uid);
-                    found_uids.push(rule.uid);
+                    if !found_uids.contains(&rule.uid) {
+                        found_uids.push(rule.uid);
+                    }
                 }
             } else {
                 stack.push(rule);
