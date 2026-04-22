@@ -115,7 +115,7 @@ pub enum Value<'src, T>
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Predicate {
-    None,
+    Unit,
     Not,
     Repeat(Repetition),
 }
@@ -328,7 +328,7 @@ impl<'src> Expr<'src> {
         resolved_pattern: &HashMap<&'src str, Match>
     ) -> Result<SeqTree> {
         Ok(match self {
-            Self::X => SeqTree::Pattern(Predicate::None, Match::X),
+            Self::X => SeqTree::Pattern(Predicate::Unit, Match::X),
             Self::Seq(exprs) => SeqTree::Seq(
                 exprs
                     .iter()
@@ -338,7 +338,7 @@ impl<'src> Expr<'src> {
             Self::Perm(_exprs) => todo!("Permutation feature not implemented yet"),
             //Self::Perm(exprs) => SeqTree::Perm(exprs.iter().map(|(e, span)| e.resolve_seq(src_dict, trie, resolved_src, resolved_pattern)).collect()?),
             Self::Any(exprs) => SeqTree::Pattern(
-                Predicate::None,
+                Predicate::Unit,
                 Match::Any(
                     exprs.iter()
                          .map(|(e, span)| e.resolve_pattern(src_dict, trie, resolved_src))
@@ -348,7 +348,7 @@ impl<'src> Expr<'src> {
             Self::Repeat(repetition, boxed) => {
                 let (pattern, span) = boxed.as_ref();
                 let pred_pattern_match = pattern.resolve_seq(src_dict, trie, resolved_src, resolved_pattern)?;
-                if let SeqTree::Pattern(Predicate::None, pattern_match) = pred_pattern_match {
+                if let SeqTree::Pattern(Predicate::Unit, pattern_match) = pred_pattern_match {
                     SeqTree::Pattern(Predicate::Repeat(repetition.clone()), pattern_match)
                 } else {
                     return Err(anyhow!("Expected a pattern in sequence repetition, found: {:?}", pattern));
@@ -356,18 +356,18 @@ impl<'src> Expr<'src> {
             },
             Self::Ident(pattern_name) => {
                 match resolved_pattern.get(*pattern_name) {
-                    Some(pattern_match) => SeqTree::Pattern(Predicate::None, pattern_match.clone()),
+                    Some(pattern_match) => SeqTree::Pattern(Predicate::Unit, pattern_match.clone()),
                     None => return Err(anyhow!("Unknown pattern in sequence: {}", pattern_name)),
                 }
             }
             Self::Pattern(_expr) => {
                 let pattern_match = self.resolve_pattern(src_dict, trie, resolved_src)?;
-                SeqTree::Pattern(Predicate::None, pattern_match)
+                SeqTree::Pattern(Predicate::Unit, pattern_match)
             }
             Self::Not(boxed) => {
                 let (pattern, span) = boxed.as_ref();
                 let pred_pattern_match = pattern.resolve_seq(src_dict, trie, resolved_src, resolved_pattern)?;
-                if let SeqTree::Pattern(Predicate::None, pattern_match) = pred_pattern_match {
+                if let SeqTree::Pattern(Predicate::Unit, pattern_match) = pred_pattern_match {
                     SeqTree::Pattern(Predicate::Not, pattern_match)
                 } else {
                     return Err(anyhow!("Expected a pattern in negation, found: {:?}", pattern));
@@ -387,24 +387,24 @@ impl<'src> Expr<'src> {
     ) -> Result<RuleCond> {
         Ok(match self {
             Self::Pattern(_) => {
-                RuleCond::Pattern(Predicate::None, self.resolve_pattern(src_dict, trie, resolved_src)?)
+                RuleCond::Pattern(Predicate::Unit, self.resolve_pattern(src_dict, trie, resolved_src)?)
             }
             Self::Repeat(repetition, boxed) => {
                 let (pattern, span) = boxed.as_ref();
                 // TODO: Also support Ident
                 let pred_pattern_match = pattern.resolve_rule_cond(src_dict, trie, resolved_src, resolved_pattern, resolved_seq)?;
-                if let RuleCond::Pattern(Predicate::None, pattern_match) = pred_pattern_match {
+                if let RuleCond::Pattern(Predicate::Unit, pattern_match) = pred_pattern_match {
                     RuleCond::Pattern(Predicate::Repeat(repetition.clone()), pattern_match)
                 } else {
                     return Err(anyhow!("Expected a pattern in repetition, found: {:?}", pattern));
                 }
             }
             Self::Any(exprs) => RuleCond::Pattern(
-                Predicate::None,
+                Predicate::Unit,
                 Match::Any(exprs.iter().map(|(expr, span)|
                     {
                         let inner_rule_cond = expr.resolve_rule_cond(src_dict, trie, resolved_src, resolved_pattern, resolved_seq)?;
-                        if let RuleCond::Pattern(Predicate::None, pattern_match) = inner_rule_cond {
+                        if let RuleCond::Pattern(Predicate::Unit, pattern_match) = inner_rule_cond {
                             Ok(pattern_match)
                         } else {
                             Err(anyhow!("Unexpected expression type in condition Any: {:?}", expr))
@@ -420,7 +420,7 @@ impl<'src> Expr<'src> {
                 let pattern = resolved_pattern.get(ident);
                 match (seq, pattern) {
                     (Some(seq), None)     => RuleCond::Seq(seq.clone().lower()),
-                    (None, Some(pattern)) => RuleCond::Pattern(Predicate::None, pattern.clone()),
+                    (None, Some(pattern)) => RuleCond::Pattern(Predicate::Unit, pattern.clone()),
                     (Some(_), Some(_))    => return Err(anyhow!("Identifier in rule condition cannot refer to both a sequence and a pattern: {}", ident)),
                     (None, None)          => return Err(anyhow!("Unknown identifier in rule condition: {}", ident)),
                 }
@@ -428,7 +428,7 @@ impl<'src> Expr<'src> {
             Self::Not(boxed) => {
                 let (pattern, span) = boxed.as_ref();
                 let pred_pattern_match = pattern.resolve_rule_cond(src_dict, trie, resolved_src, resolved_pattern, resolved_seq)?;
-                if let RuleCond::Pattern(Predicate::None, pattern_match) = pred_pattern_match {
+                if let RuleCond::Pattern(Predicate::Unit, pattern_match) = pred_pattern_match {
                     RuleCond::Pattern(Predicate::Not, pattern_match.optimise())
                 } else {
                     return Err(anyhow!("Expected a pattern in negation, found: {:?}", pattern));
@@ -464,7 +464,7 @@ impl<'src> Expr<'src> {
 impl Rule {
     pub fn evaluate(&self, events_chain: &[u32]) -> bool {
         self.0.iter().all(|cond| match cond {
-            RuleCond::Pattern(Predicate::None, pattern_match)      => pattern_match.check(events_chain),
+            RuleCond::Pattern(Predicate::Unit, pattern_match)      => pattern_match.check(events_chain),
             RuleCond::Pattern(Predicate::Not, pattern_match)       => !pattern_match.check(events_chain),
             RuleCond::Pattern(Predicate::Repeat(r), pattern_match) => r.check(events_chain.iter().fold(0, |acc, &event| if pattern_match.check(event) { acc + 1} else { acc })),
             RuleCond::Seq(_) => todo!("Sequence evaluation not implemented yet"),
@@ -475,155 +475,144 @@ impl Rule {
 pub fn find_forward_uid_rule(ledger: &Ledger, rule: &Rule) -> Vec<Uid> {
     let mut found_uids: Vec<Uid> = Vec::new();
 
-    #[derive(Clone)]
+    #[derive(Clone, Debug)]
     pub enum CondTraverse<'a> {
         Pattern{
             pred: Predicate,
-            event_match: Match,
+            event_match: &'a Match,
             cnt: usize,
         },
         Seq{
             seq_idx: usize,
-            cnt: usize,
             seq: &'a Seq,
+            cnt: usize,
         }
     }
     #[derive(Clone)]
-    pub struct RuleTraverse<'a>{
+    pub struct RuleTraverse<'a> {
         pub uid: Uid,
+        pub cond_idx: usize,
         pub conds: Vec<CondTraverse<'a>>,
-        pub neg_checks: Vec<usize>,
+    }
+
+    impl RuleTraverse<'_> {
+        pub fn satfisfied(&self) -> bool {
+            if self.cond_idx != 0 {
+                return false;
+            }
+            for cond in self.conds.iter() {
+                match cond {
+                    CondTraverse::Pattern{pred, event_match:_, cnt} => {
+                        match pred {
+                            Predicate::Unit => return false,
+                            Predicate::Not => (),
+                            Predicate::Repeat(r) => {
+                                if !r.check(*cnt) {
+                                    return false;
+                                }
+                            }
+                        }
+                    }
+                    CondTraverse::Seq{seq_idx, seq, cnt:_} => {
+                        if *seq_idx < seq.0.len() {
+                            return false;
+                        }
+                    }
+                }
+            }
+            true
+        }
     }
 
     let mut stack: Vec<RuleTraverse> = Vec::new();
 
     // Initial stack entries
     let mut conds = Vec::new();
-    let mut neg_checks = Vec::new();
     for cond in rule.0.iter().rev() {
         match cond {
-            RuleCond::Pattern(pred, event_match) => conds.push(CondTraverse::Pattern{pred: pred.clone(), event_match: event_match.clone(), cnt: 0}),
+            RuleCond::Pattern(pred, event_match) => conds.push(CondTraverse::Pattern{pred: pred.clone(), event_match, cnt: 0}),
             RuleCond::Seq(seq) => {
-                // Indicate which neg_checks to first check
-                if seq.0[0].0 == Predicate::Not {
-                    neg_checks.push(conds.len());
-                }
-                conds.push(CondTraverse::Seq{seq_idx: 0, cnt: 0, seq});
+                conds.push(CondTraverse::Seq{seq_idx: 0, seq, cnt: 0});
             }
         }
     }
     for &uid in ledger.get_start_events() {
-        stack.push(RuleTraverse{ uid, conds: conds.clone(), neg_checks: neg_checks.clone() });
+        stack.push(RuleTraverse{ uid, cond_idx: 0, conds: conds.clone()});
     }
 
     // Ledger traversal loop
     while !stack.is_empty() {
-        let rule = stack.pop().unwrap();
-        let next_uids = ledger.get_next(&rule.uid);
+        let mut rule = stack.pop().unwrap();
 
-        // The only scenario where we don't advance UID, is when a sequence contains a non match
-        // pattern statement.
-        if !rule.neg_checks.is_empty() {
-            let mut pass = true;
-            let mut conds = rule.conds.clone();
-            let mut neg_checks = Vec::new();
-            for &cond_idx in rule.neg_checks.iter() {
-                let (seq_idx, cnt, seq) = match rule.conds[cond_idx] {
-                    CondTraverse::Seq{seq_idx, cnt, seq} => (seq_idx, cnt, seq),
-                    CondTraverse::Pattern{..} => panic!("Invalid negation check in rule traversal, expected a sequence condition"),
-                };
+        //println!("Evaluating rule at UID: {:?}, condition index: {}, conditions: {:?}", rule.uid, rule.cond_idx, rule.conds);
 
-                let (pred, pattern_match) = &seq.0[seq_idx];
-                assert_eq!(pred, &Predicate::Not);
+        let mut pass = true;
+        let mut remove = false;
+        let mut bifurcate = false;
 
-                if pattern_match.check(rule.uid.event) {
-                    pass = false;
-                    break;
-                } else {
-                    let seq_idx = seq_idx + 1;
-                    if seq.0.len() > seq_idx && seq.0[seq_idx].0 == Predicate::Not {
-                        neg_checks.push(cond_idx);
-                    }
-                    conds[cond_idx] = CondTraverse::Seq{seq_idx: seq_idx, cnt: 0, seq};
-                }
-            }
-
-            if pass {
-                // If all negation checks passed, we can safely advance the UID and push the new rule state to the stack
-                stack.push(RuleTraverse{ uid: rule.uid, conds, neg_checks});
-            }
-        }
-        // Otherwise, we check conditions and advance or drop UID if not satisfying conditions
-        else {
-            let mut pass = true;
-            // First check pattern conditions, if any of them fail, we drop the UID and don't advance
-            let mut conds: Vec<_> = rule.conds
-                .into_iter()
-                .filter_map(|cond| match cond {
-                    CondTraverse::Seq{..} => Some(cond.clone()),
-                    CondTraverse::Pattern { ref pred, ref event_match, cnt} => {
-                        let event_check = event_match.check(rule.uid.event);
-                        match pred {
-                            Predicate::None => {
-                                if event_check {
-                                    None
+        let mut recheck = true;
+        while recheck {
+            let cond = &mut rule.conds[rule.cond_idx];
+            recheck = false;
+            match cond {
+                CondTraverse::Pattern{pred, event_match, cnt} => {
+                    let event_check = event_match.check(rule.uid.event);
+                    match pred {
+                        Predicate::Unit => {
+                            if event_check {
+                                // Condition satified and ready to remove
+                                remove = true;
+                            }
+                        }
+                        Predicate::Not => {
+                            if event_check {
+                                pass = false;
+                            }
+                        }
+                        Predicate::Repeat(r) => {
+                            if event_check {
+                                *cnt = *cnt + 1;
+                                if r.min() > *cnt {
+                                    // Just increment count and stay on the same sequence condition until reaching the minimum required repetitions
                                 } else {
-                                    Some(cond)
-                                }
-                            },
-                            Predicate::Not => {
-                                if event_check {
-                                    pass = false;
-                                    None
-                                } else {
-                                    Some(cond)
-                                }
-                            },
-                            Predicate::Repeat(r) => {
-                                if event_check {
-                                    let cnt = cnt + 1;
                                     if let Some(upper) = r.max() {
-                                        if cnt > upper {
+                                        if *cnt > upper {
                                             pass = false;
-                                            None
-                                        } else {
-                                            Some(CondTraverse::Pattern{ pred: pred.clone(), event_match: event_match.clone(), cnt })
                                         }
                                     } else {
-                                        Some(cond)
+                                        remove = true;
                                     }
-                                } else {
-                                    Some(cond)
                                 }
-                            },
+                            }
                         }
                     }
-                })
-                .collect();
-            if !pass {
-                continue;
-            }
-            let mut neg_checks = Vec::new();
-            // WARN: Possible bifuraction in sequence condition for repeated pattern match, when there
-            // isn't an upper bound or the upper bound is not reached yet
-            for (cond_idx, cond) in conds.iter_mut().enumerate() {
-                if let CondTraverse::Seq{seq_idx, cnt, seq} = cond {
+                }
+                CondTraverse::Seq{seq_idx, seq, cnt} => {
+                    if *seq_idx >= seq.0.len() {
+                        pass = false;
+                        break;
+                    }
+
                     let (pred, pattern_match) = &seq.0[*seq_idx];
                     let event_check = pattern_match.check(rule.uid.event);
                     match pred {
-                        Predicate::None => {
+                        // Indexes of sequence conditions that are currently in neg check (predicate=!),
+                        // to be evaluated on the same UID without advancing
+                        Predicate::Not => {
                             if event_check {
-                                let seq_idx = *seq_idx + 1;
-                                if seq.0.len() > seq_idx && seq.0[seq_idx].0 == Predicate::Not {
-                                    neg_checks.push(cond_idx);
-                                }
-                                *cond = CondTraverse::Seq{seq_idx, cnt: 0, seq};
+                                pass = false;
+                            } else {
+                                recheck = true;
+                                *cond = CondTraverse::Seq{seq_idx: *seq_idx + 1, cnt: 0, seq};
+                            }
+                        }
+                        Predicate::Unit => {
+                            if event_check {
+                                *cond = CondTraverse::Seq{seq_idx: *seq_idx + 1, cnt: 0, seq};
                             } else {
                                 pass = false;
-                                break;
                             }
-                        },
-                        Predicate::Not => panic!("Invalid sequence condition, unexpected negation predicate at seq_idx: {}", seq_idx),
+                        }
                         Predicate::Repeat(r) => {
                             if event_check {
                                 *cnt = *cnt + 1;
@@ -634,18 +623,14 @@ pub fn find_forward_uid_rule(ledger: &Ledger, rule: &Rule) -> Vec<Uid> {
                                         assert!(r.min() <= upper, "Invalid repetition predicate with min > max in sequence condition");
                                         if *cnt >= upper {
                                             // Satisfied, move on
-                                            let seq_idx = *seq_idx + 1;
-                                            if seq.0.len() > seq_idx && seq.0[seq_idx].0 == Predicate::Not {
-                                                neg_checks.push(cond_idx);
-                                            }
-                                            *cond = CondTraverse::Seq{seq_idx, cnt: 0, seq};
+                                            *cond = CondTraverse::Seq{seq_idx: *seq_idx + 1, cnt: 0, seq};
                                         } else {
                                              // Satisfied, but we might allow this pattern to
                                             // consume more events
-                                            error!("Bifurcation not supported yet. Repeat pattern in seq: {:?}, {:?}", pred, pattern_match);
+                                            bifurcate = true;
                                         }
                                     } else {
-                                        error!("Bifurcation not supported yet. Repeat pattern in seq: {:?}, {:?}", pred, pattern_match);
+                                        bifurcate = true;
                                     }
                                 }
                             }
@@ -653,42 +638,56 @@ pub fn find_forward_uid_rule(ledger: &Ledger, rule: &Rule) -> Vec<Uid> {
                     }
                 }
             }
-            if pass {
-                for &next_uid in next_uids.iter() {
-                    stack.push(RuleTraverse{ uid: next_uid, conds: conds.clone(), neg_checks: neg_checks.clone() });
+        }
+
+        assert!(!remove || !bifurcate, "Bifurcate(Seq) and Remove(Pattern) are mutually exclusive flags");
+
+        if pass {
+            let cond_idx = rule.cond_idx;
+            let next_uids = ledger.get_next(&rule.uid);
+
+            if remove {
+                rule.conds.remove(rule.cond_idx);
+            } else {
+                if rule.cond_idx + 1 >= rule.conds.len() {
+                    rule.cond_idx = 0;
+                } else {
+                    rule.cond_idx = rule.cond_idx + 1;
+                }
+            }
+
+
+            if bifurcate {
+                let mut bifurcated_rule = rule.clone();
+                if let CondTraverse::Seq{seq_idx, seq, cnt:_} = bifurcated_rule.conds[cond_idx] {
+                    bifurcated_rule.conds[cond_idx] = CondTraverse::Seq{seq_idx: seq_idx + 1, cnt: 0, seq};
+                } else {
+                    panic!("Expected a sequence condition for bifurcation");
                 }
 
-                if next_uids.is_empty() {
-                    let mut pass = true;
-                    // Check if conditions have been satisfied
-                    for cond in conds.iter() {
-                        pass =
-                        match cond {
-                            CondTraverse::Pattern{pred, event_match: _, cnt} => {
-                                match pred {
-                                    Predicate::None => false,
-                                    Predicate::Not => true,
-                                    Predicate::Repeat(r) => r.check(*cnt),
-                                }
-                            },
-                            CondTraverse::Seq{seq_idx, cnt: _, seq} => {
-                                if *seq_idx < seq.0.len() {
-                                    // Sequence not fully satisfied
-                                    false
-                                } else {
-                                    true
-                                }
-                            }
-                        };
-                        if !pass {
-                            break;
-                        }
+                if rule.cond_idx == 0 {
+                    for &next_uid in next_uids.iter() {
+                        stack.push(RuleTraverse{ uid: next_uid, cond_idx: bifurcated_rule.cond_idx, conds: bifurcated_rule.conds.clone()});
                     }
-
-                    if pass {
+                    if next_uids.is_empty() && rule.satfisfied() {
+                        //println!("Found a match for rule with UID: {:?}", rule.uid);
                         found_uids.push(rule.uid);
                     }
+                } else {
+                    stack.push(bifurcated_rule);
                 }
+            }
+
+            if rule.cond_idx == 0 {
+                for &next_uid in next_uids.iter() {
+                    stack.push(RuleTraverse{ uid: next_uid, cond_idx: rule.cond_idx, conds: rule.conds.clone()});
+                }
+                if next_uids.is_empty() && rule.satfisfied() {
+                    //println!("Found a match for rule with UID: {:?}", rule.uid);
+                    found_uids.push(rule.uid);
+                }
+            } else {
+                stack.push(rule);
             }
         }
     }
