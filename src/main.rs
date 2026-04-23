@@ -1,5 +1,5 @@
-use std::{env, fmt, fs, path::Path};
-use aetherus_events::{reader::read_ledger};
+use std::{collections::HashMap, env, fmt, fs, path::Path};
+use aetherus_events::{ledger::Uid, reader::{read_csv, read_ledger}};
 use ariadne::{sources, Color, Label, Report, ReportKind};
 use env_logger::Env;
 use filter_dsl::{ast::{Declaration, Expr}, model::{find_forward_uid_rule, resolve_ast}, parse::expr_parser, token::lexer};
@@ -139,13 +139,13 @@ fn main() {
 
     //println!("Declarations: {:?}", declarations);
 
-    let ledger_path = extract_ledger_path(&declarations, script_src, script_filepath);
+    let ledger_path = extract_ledger_path(&declarations, script_src, script_filepath).unwrap();
 
     let signals_path = extract_signals_path(&declarations, script_src, script_filepath);
 
     info!("Start resolving with ledger={:?}, signals={:?}", ledger_path, signals_path);
 
-    let ledger = read_ledger(&ledger_path.unwrap()).expect("Failed to read ledger file");
+    let ledger = read_ledger(&ledger_path).expect("Failed to read ledger file");
 
     let src_dict = ledger.get_src_dict();
 
@@ -157,9 +157,32 @@ fn main() {
         rules.iter().map(|(key, _val)| key.to_string()).collect::<Vec<_>>()
     );
 
+    if let Some(signals_path) = signals_path {
+        let mut uid_hist = HashMap::new();
+        let signals = read_csv(&signals_path).expect("Failed to read signals file");
+        for signal in signals {
+            *uid_hist.entry(signal.uid).or_insert(0) += 1;
+        }
+        // Get top most common UIDs
+        let mut uid_hist_vec: Vec<_> = uid_hist.iter().collect();
+        uid_hist_vec.sort_by_key(|&(_uid, count)| *count);
+
+        let uids_top_10 = uid_hist_vec.iter().rev().take(10).map(|(uid, _count)| Uid::decode(**uid)).collect::<Vec<_>>();
+        println!("Top 10 most common UIDs in signals: {:#?}", uids_top_10);
+        let ledger_dirname = ledger_path.parent().unwrap_or_else(|| std::path::Path::new("."));
+        let dot_file = ledger_dirname.join(format!("{}_top.dot", script_filepath.file_stem().unwrap().to_str().unwrap()));
+        let graphviz_dot = ledger.emit_dot(&uids_top_10);
+        std::fs::write(&dot_file, graphviz_dot).expect("Failed to write DOT file");
+    }
+
     for (rule_name, rule) in rules.iter() {
         println!("Rule: {rule_name}");
         let uids = find_forward_uid_rule(&ledger, rule);
         println!("Found UIDS: {:#?}", uids);
+
+        let ledger_dirname = ledger_path.parent().unwrap_or_else(|| std::path::Path::new("."));
+        let dot_file = ledger_dirname.join(format!("{}_{}.dot", script_filepath.file_stem().unwrap().to_str().unwrap(), rule_name));
+        let graphviz_dot = ledger.emit_dot(&uids);
+        std::fs::write(&dot_file, graphviz_dot).expect("Failed to write DOT file");
     }
 }
