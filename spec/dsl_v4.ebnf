@@ -5,6 +5,7 @@ Declaration = SrcDecl
             | PatternDecl
             | RuleDecl
             ;
+Comment     = "#" { !"#" anycharacter } ;
 
 SrcDecl     = "src" Ident "=" SrcIdValue ;
 PatternDecl = "pattern" Ident "=" Pattern ;

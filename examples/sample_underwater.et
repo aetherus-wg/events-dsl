@@ -2,10 +2,10 @@
 # used to easily define patterns and sequences of interested,
 # in order to classify and analyse the photon histories in a MCRT simulation.
 #
-# Define the serialised Ledger and Photons collected
+# Define the serialised Ledger and Signals collected
 # ============================================================
 ledger  = "../aetherus-scene/underwater-paper/out/simulation_ledger.json"
-photons = "../aetherus-scene/underwater-paper/out/multispectral/photon_collector_spad_sensor.csv"
+signals = "../aetherus-scene/underwater-paper/out/multispectral/photon_collector_spad_sensor.csv"
 
 # Define material and surface identifiers we want to match for
 # ============================================================
@@ -31,48 +31,48 @@ pattern tube_surf         = MCRT | Reflector | X                      | tube_id
 # ==============================================================
 
 sequence toy_detect = seq[
-  Emission | X | Light(0),
-  * X,
-  toy_surf,
-  * X,
-  Detection | X | Detector(0),
+    Emission | X | Light(0),
+    * X,
+    toy_surf,
+    * X,
+    Detection | X | Detector(0),
 ]
 
 sequence tube_detect = seq[
-  Emission | X | Light(0),
-  * X,
-  tube_surf,
-  * X,
-  Detection | X | Detector(0),
+    Emission | X | Light(0),
+    * X,
+    tube_surf,
+    * X,
+    Detection | X | Detector(0),
 ]
 
 sequence seq_water_backscatter = seq[
-  Emission | X | Light(0),
-  * X,
-  water_scatter,
-  * X,
-  Detection | X | Detector(0),
+    Emission | X | Light(0),
+    * X,
+    water_scatter,
+    * X,
+    Detection | X | Detector(0),
 ]
 
 # Note how rule tries to validate all conditions enumerated
 rule backscatter = {
-  ! any[tube_surf, toy_surf],
-  seq[
-    Emission | X | Light(0),
-    * X,
-    {2,} water_scatter,
-    * X,
-    Detection | X | Detector(0),
-  ],
-  seq_water_backscatter, # equivalent to the inline expression above
+    ! any[tube_surf, toy_surf],
+    seq[
+        Emission | X | Light(0),
+        * X,
+        + water_scatter,
+        * X,
+        Detection | X | Detector(0),
+    ],
 }
 
-rule glass_detect = {
-  seq[
-    Emission | X | Light(0),
-    * X,
-    glass_interf,
-    * X,
-    Detection | X | Detector(0),
-  ]
+rule toy_or_tube_detect = {
+    any[toy_surf, tube_surf],
+    seq[
+        Emission | X | Light(0),
+        * X,
+        + water_scatter,
+        * X,
+        Detection | X | Detector(0),
+    ],
 }
