@@ -4,8 +4,8 @@
 #
 # Define the serialised Ledger and Signals collected
 # ============================================================
-ledger  = "../aetherus-scene/underwater-paper/out/simulation_ledger.json"
-signals = "../aetherus-scene/underwater-paper/out/multispectral/photon_collector_spad_sensor.csv"
+ledger  = "../../aetherus-scene/underwater-paper/out/simulation_ledger.json"
+signals = "../../aetherus-scene/underwater-paper/out/multispectral/photon_collector_spad_sensor.csv"
 
 # Define material and surface identifiers we want to match for
 # ============================================================

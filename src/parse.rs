@@ -15,17 +15,31 @@ where
             select!{Token::Str(ident) => ident}
                 .delimited_by(just(Token::Ctrl('(')), just(Token::Ctrl(')')))
         )
-        .map_with(|(ty, ident), e|
-            (Expr::SrcId(SrcId::parse_name(ty, ident)), e.span())
-        );
+        .map_with(|(ty, ident), e| {
+            match SrcId::parse_name(ty, ident) {
+                Ok(src_id) => (Expr::SrcId(src_id), e.span()),
+                Err(err) => {
+                    let span = e.span();
+                    e.emit(chumsky::prelude::Rich::custom(span, err.to_string()));
+                    (Expr::X, span)
+                }
+            }
+        });
     let src_id_val = select!{Token::SrcId(ty) => ty}
         .then(
             select!{Token::Num(val) => val}
                 .delimited_by(just(Token::Ctrl('(')), just(Token::Ctrl(')')))
         )
-        .map_with(|(ty, id), e|
-            (Expr::SrcId(SrcId::parse_id(ty, id)), e.span())
-        );
+        .map_with(|(ty, id), e| {
+            match SrcId::parse_id(ty, id) {
+                Ok(src_id) => (Expr::SrcId(src_id), e.span()),
+                Err(err) => {
+                    let span = e.span();
+                    e.emit(chumsky::prelude::Rich::custom(span, err.to_string()));
+                    (Expr::X, span)
+                }
+            }
+        });
     let src_id = src_id_name.or(src_id_val).labelled("source identifier");
 
 

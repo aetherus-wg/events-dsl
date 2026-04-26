@@ -39,24 +39,24 @@ macro_rules! get_src_id {
 }
 
 impl<'a> SrcId<'a> {
-    pub fn parse_id(src_id_type: &str, id: u16) -> Self {
+    pub fn parse_id(src_id_type: &str, id: u16) -> Result<Self> {
         match src_id_type {
-            "Mat"              => Self::Mat(id),
-            "Surf"             => Self::Surf(id),
-            "MatSurf"          => Self::MatSurf(id),
-            "Light"            => Self::Light(id),
-            "Detector" | "Det" => Self::Detector(id),
-            _ => panic!("Unknown source id type: {}", src_id_type),
+            "Mat"              => Ok(Self::Mat(id)),
+            "Surf"             => Ok(Self::Surf(id)),
+            "MatSurf"          => Ok(Self::MatSurf(id)),
+            "Light"            => Ok(Self::Light(id)),
+            "Detector" | "Det" => Ok(Self::Detector(id)),
+            _ => Err(anyhow!("Unknown source id type: {}", src_id_type)),
         }
     }
-    pub fn parse_name(src_id_type: &str, name: &'a str) -> Self {
+    pub fn parse_name(src_id_type: &str, name: &'a str) -> Result<Self> {
         match src_id_type {
-            "Mat"              => Self::MatName(name),
-            "Surf"             => Self::SurfName(name),
-            "MatSurf"          => Self::MatSurfName(name),
-            "Light"            => Self::LightName(name),
-            "Detector" | "Det" => Self::DetectorName(name),
-            _ => panic!("Unknown source id type: {}", src_id_type),
+            "Mat"              => Ok(Self::MatName(name)),
+            "Surf"             => Ok(Self::SurfName(name)),
+            "MatSurf"          => Ok(Self::MatSurfName(name)),
+            "Light"            => Ok(Self::LightName(name)),
+            "Detector" | "Det" => Ok(Self::DetectorName(name)),
+            _ => Err(anyhow!("Unknown source id type: {}", src_id_type)),
         }
     }
     pub fn resolve(&self, dict: &HashMap<SrcName, DomainSrcId>) -> Result<DomainSrcId> {

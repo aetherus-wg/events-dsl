@@ -1,8 +1,13 @@
 use std::collections::HashSet;
 
+use anyhow::Result;
 use log::{debug, trace};
 
-use crate::{SrcId, bits::BitsMatch, trie::{self, TrieNode}};
+use crate::{
+    SrcId,
+    bits::BitsMatch,
+    trie::{self, TrieNode},
+};
 
 #[derive(Debug)]
 pub enum Field<'a> {
@@ -14,7 +19,7 @@ pub enum Field<'a> {
 #[derive(Debug)]
 pub struct Pattern<'a>(pub Vec<Field<'a>>);
 
-pub fn search_trie(trie_node: &TrieNode, pattern: &Pattern) -> (BitsMatch, SrcId) {
+pub fn search_trie(trie_node: &TrieNode, pattern: &Pattern) -> Result<(BitsMatch, SrcId)> {
     let mut encodings = Vec::new();
     #[derive(Clone, Hash, PartialEq, Eq)]
     struct StackEntry<'a> {
@@ -36,11 +41,15 @@ pub fn search_trie(trie_node: &TrieNode, pattern: &Pattern) -> (BitsMatch, SrcId
                 src_id: self.src_id.clone(),
             }
         }
-        pub fn step_trie(&self, child_field: &trie::Field, child_node: &'a trie::TrieNode) -> StackEntry<'a> {
+        pub fn step_trie(
+            &self,
+            child_field: &trie::Field,
+            child_node: &'a trie::TrieNode,
+        ) -> StackEntry<'a> {
             StackEntry {
                 node: &child_node,
                 pattern_index: self.pattern_index,
-                prev_trie_x: matches!(child_field, trie::Field::X { attr:None, .. }),
+                prev_trie_x: matches!(child_field, trie::Field::X { attr: None, .. }),
                 bits_match: self.bits_match.combine(child_field.bits_match()),
                 encoding: {
                     let mut encoding = self.encoding.clone();
@@ -147,7 +156,12 @@ pub fn search_trie(trie_node: &TrieNode, pattern: &Pattern) -> (BitsMatch, SrcId
                 (Field::X, trie::Field::SrcId(src_id)) => {
                     // End of trie, so advancing only pattern is certainly going to be dropped
                     assert!(child_node.is_terminal);
-                    stack.push(entry.step_trie(&child_field, &child_node).step_pattern().with_src_id(src_id.clone()));
+                    stack.push(
+                        entry
+                            .step_trie(&child_field, &child_node)
+                            .step_pattern()
+                            .with_src_id(src_id.clone()),
+                    );
                 }
                 (Field::Field(_), trie::Field::X { .. }) => {
                     // Trie holds all possible routes that it can be specified,
@@ -157,9 +171,9 @@ pub fn search_trie(trie_node: &TrieNode, pattern: &Pattern) -> (BitsMatch, SrcId
                     // NOTE: Avoid the need to find min products sum, and don't allow Pattern::X to
                     // consume named fields from the Trie
                 }
-                (Field::Field(_), trie::Field::SrcId(_)) => { }
-                (Field::SrcId(_), trie::Field::X{..}) => { }
-                (Field::SrcId(_), trie::Field::Named{..}) => { }
+                (Field::Field(_), trie::Field::SrcId(_))     => {}
+                (Field::SrcId(_), trie::Field::X { .. })     => {}
+                (Field::SrcId(_), trie::Field::Named { .. }) => {}
             }
         }
 
@@ -171,25 +185,34 @@ pub fn search_trie(trie_node: &TrieNode, pattern: &Pattern) -> (BitsMatch, SrcId
     }
 
     if encodings.is_empty() {
-        panic!("No encodings found matching pattern: {:?}", pattern);
+        return Err(anyhow::anyhow!(
+            "No encodings found matching pattern: {:?}",
+            pattern
+        ));
     }
     debug!("Found {} encodings matching pattern: {:?}", encodings.len(), encodings);
 
     // Combine all encodings into one BitsMatch with mask covering all bits and value being the OR of all values
     // FIXME: Replace with combination instead of retruning first match
-    let bits_match = encodings.iter().fold(BitsMatch { mask: 0, value: 0 }, |acc, enc| acc.combine(&enc.0));
+    let bits_match = encodings
+        .iter()
+        .fold(BitsMatch { mask: 0, value: 0 }, |acc, enc| {
+            acc.combine(&enc.0)
+        });
 
-    let src_id = encodings.iter().fold(SrcId::SrcId, |acc, enc| {
-        match acc.combine(&enc.1) {
-            Some(strict_type) => strict_type,
-            None => {
-                panic!(
+    let src_id = encodings
+        .iter()
+        .fold(Ok(SrcId::SrcId) as Result<SrcId>, |acc, enc| {
+            let acc = acc?;
+            match acc.combine(&enc.1) {
+                Some(strict_type) => Ok(strict_type),
+                None => Err(anyhow::anyhow!(
                     "Failed to combine SrcId types: ({}, {})",
-                    acc, enc.1
-                );
+                    acc,
+                    enc.1
+                )),
             }
-        }
-    });
+        })?;
 
-    (bits_match, src_id)
+    Ok((bits_match, src_id))
 }

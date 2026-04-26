@@ -1,5 +1,6 @@
 use std::{collections::HashMap, env, fmt, fs, path::Path};
 use aetherus_events::{ledger::Uid, reader::{read_csv, read_ledger}};
+use anyhow::Result;
 use ariadne::{sources, Color, Label, Report, ReportKind};
 use env_logger::Env;
 use filter_dsl::{ast::{Declaration, Expr}, model::{find_forward_uid_rule, resolve_ast}, parse::expr_parser, token::lexer};
@@ -106,7 +107,7 @@ fn parse_failure(err: &Rich<impl fmt::Display>, src: &str) -> ! {
     )
 }
 
-fn main() {
+fn main() -> Result<()> {
     env_logger::Builder::from_env(Env::default().default_filter_or("info")).init();
 
     let encoding_filename = env::args().nth(1).expect("Expected file argument for encoding scheme");
@@ -177,7 +178,7 @@ fn main() {
 
     for (rule_name, rule) in rules.iter() {
         println!("Rule: {rule_name}");
-        let uids = find_forward_uid_rule(&ledger, rule);
+        let uids = find_forward_uid_rule(&ledger, rule)?;
         println!("Found UIDS: {:#?}", uids);
 
         let ledger_dirname = ledger_path.parent().unwrap_or_else(|| std::path::Path::new("."));
@@ -185,4 +186,6 @@ fn main() {
         let graphviz_dot = ledger.emit_dot(&uids);
         std::fs::write(&dot_file, graphviz_dot).expect("Failed to write DOT file");
     }
+
+    Ok(())
 }

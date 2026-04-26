@@ -86,7 +86,25 @@ impl Check<&[u32]> for Match
 impl Into<encoding_spec::SrcId> for SrcId<'_> {
     fn into(self) -> encoding_spec::SrcId {
         match self {
-            Self::None            => panic!("Cannot convert None SrcId to encoding_spec::SrcId"),
+            Self::None            => encoding_spec::SrcId::SrcId,
+            Self::Mat(_)          => encoding_spec::SrcId::MatId,
+            Self::Surf(_)         => encoding_spec::SrcId::SurfId,
+            Self::MatSurf(_)      => encoding_spec::SrcId::MatSurfId,
+            Self::Light(_)        => encoding_spec::SrcId::LightId,
+            Self::Detector(_)     => encoding_spec::SrcId::DetectorId,
+            Self::MatName(_)      => encoding_spec::SrcId::MatId,
+            Self::SurfName(_)     => encoding_spec::SrcId::SurfId,
+            Self::MatSurfName(_)  => encoding_spec::SrcId::MatSurfId,
+            Self::LightName(_)    => encoding_spec::SrcId::LightId,
+            Self::DetectorName(_) => encoding_spec::SrcId::DetectorId,
+        }
+    }
+}
+
+impl SrcId<'_> {
+    pub fn to_encoding_src_id(&self) -> encoding_spec::SrcId {
+        match self {
+            Self::None            => encoding_spec::SrcId::SrcId,
             Self::Mat(_)          => encoding_spec::SrcId::MatId,
             Self::Surf(_)         => encoding_spec::SrcId::SurfId,
             Self::MatSurf(_)      => encoding_spec::SrcId::MatSurfId,
@@ -309,7 +327,7 @@ impl<'src> Expr<'src> {
 
                 fields.push(pattern::Field::SrcId(src_id_type));
                 let pattern = Pattern(fields);
-                let (bits_match, _src_id_type) = trie.get(&pattern);
+                let (bits_match, _src_id_type) = trie.get(&pattern).context("Failed to get pattern from trie")?;
                 Match::And(Box::new(Match::Bits(bits_match)), Box::new(src_id_match)).optimise()
             }
             Self::Any(exprs) => {
@@ -472,7 +490,7 @@ impl Rule {
     }
 }
 
-pub fn find_forward_uid_rule(ledger: &Ledger, rule: &Rule) -> Vec<Uid> {
+pub fn find_forward_uid_rule(ledger: &Ledger, rule: &Rule) -> Result<Vec<Uid>> {
     let mut found_uids: Vec<Uid> = Vec::new();
 
     #[derive(Clone, Debug)]
@@ -665,7 +683,7 @@ pub fn find_forward_uid_rule(ledger: &Ledger, rule: &Rule) -> Vec<Uid> {
                 if let CondTraverse::Seq{seq_idx, seq, cnt:_} = bifurcated_rule.conds[cond_idx] {
                     bifurcated_rule.conds[cond_idx] = CondTraverse::Seq{seq_idx: seq_idx + 1, cnt: 0, seq};
                 } else {
-                    panic!("Expected a sequence condition for bifurcation");
+                    return Err(anyhow::anyhow!("Expected a sequence condition for bifurcation"));
                 }
 
                 if rule.cond_idx == 0 {
@@ -699,5 +717,5 @@ pub fn find_forward_uid_rule(ledger: &Ledger, rule: &Rule) -> Vec<Uid> {
         }
     }
 
-    found_uids
+    Ok(found_uids)
 }

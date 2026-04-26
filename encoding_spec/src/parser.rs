@@ -1,13 +1,13 @@
+use crate::bits::{BitsMatch, BitsRange};
+use crate::trie::{Encoding, Field};
 use anyhow::anyhow;
-use anyhow::{Result};
+use anyhow::{Context, Result};
+use itertools::Itertools;
 use markdown_ppp::ast::Block;
-use markdown_ppp::ast::{Inline};
+use markdown_ppp::ast::Inline;
 use markdown_ppp::parser::MarkdownParserState;
 use markdown_ppp::parser::parse_markdown;
-use crate::bits::{BitsRange, BitsMatch};
-use crate::trie::{Encoding, Field};
 use std::str::FromStr;
-use itertools::Itertools;
 
 fn unwrap_inline(inline: &Inline) -> Result<String> {
     match inline {
@@ -18,7 +18,8 @@ fn unwrap_inline(inline: &Inline) -> Result<String> {
 
 pub fn parse_encodings(src: &str) -> Result<Vec<Encoding>> {
     let state = MarkdownParserState::new();
-    let document = parse_markdown(state, src).unwrap();
+    let document =
+        parse_markdown(state, src).map_err(|e| anyhow!("Failed to parse markdown: {:?}", e))?;
 
     let mut encodings = Vec::new();
 
@@ -35,11 +36,13 @@ pub fn parse_encodings(src: &str) -> Result<Vec<Encoding>> {
             for (fields_md, encodings_md) in table.rows.iter().skip(1).tuples() {
                 let mut specified = true;
                 let mut fields_encoding = Vec::new();
-                for (bit_range, (field_md, encoding_md)) in
-                    bits_ranges.iter().zip(fields_md.iter().zip(encodings_md.iter()))
+                for (bit_range, (field_md, encoding_md)) in bits_ranges
+                    .iter()
+                    .zip(fields_md.iter().zip(encodings_md.iter()))
                 {
                     let field_str = unwrap_inline(&field_md[0])?;
-                    let encoding = BitsMatch::parse(&bit_range, &unwrap_inline(&encoding_md[0])?);
+                    let encoding = BitsMatch::parse(&bit_range, &unwrap_inline(&encoding_md[0])?)
+                        .context("Failed to parse bits match")?;
                     if field_str.starts_with('_') && field_str.len() > 1 {
                         specified = false;
                     }
@@ -52,19 +55,21 @@ pub fn parse_encodings(src: &str) -> Result<Vec<Encoding>> {
                         let attr = caps.get(2).map(|m| m.as_str().to_string());
                         if attr == Some("SrcId".to_string()) {
                             Field::from_str(name.as_str())?
-                        }
-                        else if name == "_" || name == "" || name == "X" {
-                            Field::X{size: bit_range.size(), attr}
+                        } else if name == "_" || name == "" || name == "X" {
+                            Field::X {
+                                size: bit_range.size(),
+                                attr,
+                            }
                         } else {
                             Field::Named {
                                 name,
                                 attr,
-                                bits: encoding.clone(),
+                                bits: encoding,
                                 size: bit_range.size(),
                             }
                         }
                     } else {
-                        panic!("Invalid field name format: {}", field_str);
+                        return Err(anyhow!("Invalid field name format: {}", field_str));
                     };
                     fields_encoding.push(field);
                 }
@@ -104,7 +109,7 @@ pub fn resolved_dir_encodings(encodings: &Vec<Encoding>) -> Vec<Encoding> {
                 .flat_map({
                     let dir_fields_captured = dir_fields.clone();
                     move |pos| {
-                    dir_fields_captured
+                        dir_fields_captured
                             .clone()
                             .into_iter()
                             .map(move |dir_field| {
@@ -113,7 +118,8 @@ pub fn resolved_dir_encodings(encodings: &Vec<Encoding>) -> Vec<Encoding> {
                                 new_encoding[pos] = dir_field.clone();
                                 Encoding(new_encoding)
                             })
-                }})
+                    }
+                })
         })
         .collect()
 }
@@ -124,8 +130,7 @@ pub fn extract_fields(encodings: &Vec<Encoding>) -> Vec<String> {
     encodings
         .iter()
         .flat_map(|Encoding(fields_encoding)| {
-            fields_encoding.iter().filter_map(|field|
-                match field {
+            fields_encoding.iter().filter_map(|field| match field {
                     Field::Named{name, attr: _, bits: _, size: _} => Some(name.clone()),
                     _ => None,
                 }

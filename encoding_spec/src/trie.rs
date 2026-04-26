@@ -1,6 +1,6 @@
 use crate::{SrcId, bits::BitsMatch, pattern::{Pattern, search_trie}};
 use std::{collections::HashSet, str::FromStr};
-use anyhow::{anyhow, Error};
+use anyhow::{anyhow, Error, Result};
 
 #[derive(Debug, Clone, Hash)]
 pub enum Field {
@@ -193,10 +193,10 @@ impl Trie {
     ///     pattern::Field::SrcId(SrcId::MatId),
     /// ]);
     ///
-    /// let (bits_match, src_id_type)= trie.get(&pattern);
+    /// let (bits_match, src_id_type)= trie.get(&pattern)?;
     /// assert_eq!(bits_match, BitsMatch{mask: 0x0ff00000, value: 0x03600000});
     /// ```
-    pub fn get(&self, query: &Pattern) -> (BitsMatch, SrcId) {
+    pub fn get(&self, query: &Pattern) -> Result<(BitsMatch, SrcId)> {
         search_trie(&self.root, query)
     }
 

@@ -44,7 +44,7 @@ fn main() -> Result<()> {
         pattern::Field::SrcId(SrcId::MatId),
     ]);
 
-    let (bits_match, src_id) = pattern::search_trie(&trie.root, &pattern);
+    let (bits_match, src_id) = pattern::search_trie(&trie.root, &pattern)?;
 
     println!("Bits match for pattern {:?}: {:?} with {}", pattern, bits_match, src_id);
 

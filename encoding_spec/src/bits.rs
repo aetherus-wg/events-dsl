@@ -1,5 +1,5 @@
+use anyhow::{anyhow, Error, Result};
 use std::str::FromStr;
-use anyhow::{anyhow, Error};
 
 #[derive(Debug)]
 pub struct BitsRange(usize, usize); // (end, start) - "end:start" Verilog style
@@ -58,7 +58,7 @@ impl std::fmt::Debug for BitsMatch {
 }
 
 impl BitsMatch {
-    pub fn parse(bits_range: &BitsRange, input: &str) -> Self {
+    pub fn parse(bits_range: &BitsRange, input: &str) -> Result<Self> {
         let num_bits = bits_range.0 - bits_range.1 + 1;
         let lsb_pos = bits_range.1;
         let mask = ((1 << num_bits) - 1) << lsb_pos;
@@ -67,7 +67,7 @@ impl BitsMatch {
         // - "0x2F" (hex)
         // - "_"/"X" (don't care)
         match input.trim() {
-            "X" | "_" => BitsMatch{mask: 0, value: 0},
+            "X" | "_" => Ok(BitsMatch { mask: 0, value: 0 }),
             s => {
                 if let Some(rest) = s.strip_prefix("0b") {
                     // Binary value can also be "0b01xxxxx"
@@ -83,23 +83,39 @@ impl BitsMatch {
                                 mask = (mask << 1) | 1;
                                 value = (value << 1) | if c == '1' { 1 } else { 0 };
                             }
-                            _ => panic!("Invalid character '{}' in binary literal '{}'", c, s),
+                            _ => return Err(anyhow!("Invalid character '{}' in binary literal '{}'", c, s)),
                         }
                     }
-                    BitsMatch{ mask: mask << lsb_pos, value: value << lsb_pos }
+                    Ok(BitsMatch {
+                        mask: mask << lsb_pos,
+                        value: value << lsb_pos,
+                    })
                 } else if let Some(rest) = s.strip_prefix("0x") {
-                    let value = u32::from_str_radix(rest, 16).unwrap() << lsb_pos;
-                    BitsMatch { mask, value }
+                    Ok(BitsMatch {
+                        mask,
+                        value: u32::from_str_radix(rest, 16)
+                            .map_err(|e| anyhow!("Invalid hex value '{}': {}", rest, e))?
+                            << lsb_pos,
+                    })
                 } else {
-                    let value = s.parse::<u32>().unwrap() << lsb_pos;
-                    BitsMatch{ mask, value }
+                    Ok(BitsMatch {
+                        mask,
+                        value: s
+                            .parse::<u32>()
+                            .map_err(|e| anyhow!("Invalid integer value '{}': {}", s, e))?
+                            << lsb_pos,
+                    })
                 }
             }
         }
     }
 
     pub fn combine(&self, other: &BitsMatch) -> BitsMatch {
-        assert!(self.mask & other.mask == 0 || (self.mask & other.mask & self.value) == (self.mask & other.mask & other.value), "Cannot combine BitsMatch with ambiguous values in overlapping masks");
+        assert!(
+            self.mask & other.mask == 0
+                || (self.mask & other.mask & self.value) == (self.mask & other.mask & other.value),
+            "Cannot combine BitsMatch with ambiguous values in overlapping masks"
+        );
         BitsMatch {
             mask: self.mask | other.mask,
             value: (self.mask & self.value) | (other.mask & other.value),
