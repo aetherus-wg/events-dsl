@@ -126,3 +126,136 @@ impl BitsMatch {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bits_range_size() {
+        assert_eq!(BitsRange(31, 28).size(), 4);
+        assert_eq!(BitsRange(15, 0).size(), 16);
+        assert_eq!(BitsRange(23, 16).size(), 8);
+    }
+
+    #[test]
+    fn bits_range_parse_valid() {
+        assert_eq!(BitsRange::from_str("31:28").unwrap(), BitsRange(31, 28));
+        assert_eq!(BitsRange::from_str("15:0").unwrap(), BitsRange(15, 0));
+        assert_eq!(BitsRange::from_str("7:0").unwrap(), BitsRange(7, 0));
+    }
+
+    #[test]
+    fn bits_range_parse_invalid() {
+        assert!(BitsRange::from_str("invalid").is_err());
+        assert!(BitsRange::from_str("31-28").is_err());
+        assert!(BitsRange::from_str("31:").is_err());
+        assert!(BitsRange::from_str(":28").is_err());
+    }
+
+    #[test]
+    fn bits_match_check() {
+        let bm = BitsMatch {
+            mask: 0xF0000000,
+            value: 0x10000000,
+        };
+        assert!(bm.check(0x12345678));
+        assert!(!bm.check(0x02345678));
+        assert!(!bm.check(0x20000000));
+    }
+
+    #[test]
+    fn bits_match_dont_care() {
+        let bm = BitsMatch { mask: 0, value: 0 };
+        assert!(bm.check(0xFFFFFFFF));
+        assert!(bm.check(0x00000000));
+    }
+
+    #[test]
+    fn bits_match_parse_binary() {
+        let range = BitsRange(27, 24);
+        let bm = BitsMatch::parse(&range, "0b0011").unwrap();
+        assert_eq!(bm.mask, 0x0F000000);
+        assert_eq!(bm.value, 0x03000000);
+    }
+
+    #[test]
+    fn bits_match_parse_binary_with_x() {
+        let range = BitsRange(7, 0);
+        let bm = BitsMatch::parse(&range, "0bxxxxxxx1").unwrap();
+        assert_eq!(bm.mask, 0x00000001);
+        assert!(bm.check(0x00000001));
+        assert!(bm.check(0x00000003));
+        assert!(!bm.check(0x00000002));
+    }
+
+    #[test]
+    fn bits_match_parse_hex() {
+        let range = BitsRange(15, 0);
+        let bm = BitsMatch::parse(&range, "0x002F").unwrap();
+        assert_eq!(bm.mask, 0xFFFF);
+        assert_eq!(bm.value, 0x002F);
+    }
+
+    #[test]
+    fn bits_match_parse_decimal() {
+        let range = BitsRange(23, 16);
+        let bm = BitsMatch::parse(&range, "42").unwrap();
+        assert_eq!(bm.mask, 0x00FF0000);
+        assert_eq!(bm.value, 0x002A0000);
+    }
+
+    #[test]
+    fn bits_match_parse_dont_care() {
+        let range = BitsRange(31, 28);
+        let bm = BitsMatch::parse(&range, "_").unwrap();
+        assert_eq!(bm, BitsMatch { mask: 0, value: 0 });
+
+        let bm2 = BitsMatch::parse(&range, "X").unwrap();
+        assert_eq!(bm2, BitsMatch { mask: 0, value: 0 });
+    }
+
+    #[test]
+    fn bits_match_combine() {
+        let bm1 = BitsMatch {
+            mask: 0xF0000000,
+            value: 0x10000000,
+        };
+        let bm2 = BitsMatch {
+            mask: 0x0F000000,
+            value: 0x03000000,
+        };
+        let combined = bm1.combine(&bm2);
+        assert_eq!(combined.mask, 0xFF000000);
+        assert_eq!(combined.value, 0x13000000);
+    }
+
+    #[test]
+    fn bits_match_combine_overlapping() {
+        let bm1 = BitsMatch {
+            mask: 0xFFFF0000,
+            value: 0x12340000,
+        };
+        let bm2 = BitsMatch {
+            mask: 0x0000FFFF,
+            value: 0x00005678,
+        };
+        let combined = bm1.combine(&bm2);
+        assert_eq!(combined.mask, 0xFFFFFFFF);
+        assert_eq!(combined.value, 0x12345678);
+    }
+
+    #[test]
+    fn bits_match_combine_ambiguous_fails() {
+        let bm1 = BitsMatch {
+            mask: 0xFF000000,
+            value: 0x10000000,
+        };
+        let bm2 = BitsMatch {
+            mask: 0xFF000000,
+            value: 0x20000000,
+        };
+        let result = std::panic::catch_unwind(|| bm1.combine(&bm2));
+        assert!(result.is_err());
+    }
+}

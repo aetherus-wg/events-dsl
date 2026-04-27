@@ -139,3 +139,138 @@ pub fn extract_fields(encodings: &Vec<Encoding>) -> Vec<String> {
         .unique()
         .collect()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_simple_markdown_table() {
+        let src = r#"
+# Heading
+
+| 31:28 | 27:24    | 15:0            |
+|-------|----------|-----------------|
+| MCRT  | Emission | LightId {SrcId} |
+| 0b0011| 0b0001   | _               |
+"#;
+        let encodings = parse_encodings(src).unwrap();
+        assert_eq!(encodings.len(), 1);
+    }
+
+    #[test]
+    fn parse_multiple_encodings() {
+        let src = r#"
+| 31:28    | 27:24 | 15:0              |
+|----------|-------|-------------------|
+| MCRT     | _     | MatSurfId {SrcId} |
+| 0b0011   | 0bxx  | _                 |
+| Emission | _     | LightId {SrcId}   |
+| 0b0001   | _     | _                 |
+"#;
+        let encodings = parse_encodings(src).unwrap();
+        assert!(encodings.len() >= 2);
+    }
+
+    #[test]
+    fn parse_underscore_row_ignored() {
+        let src = r#"
+| 31:28  | 15:0              |
+|--------|-------------------|
+| MCRT   | MatSurfId {SrcId} |
+| 0b0011 | _                 |
+"#;
+        let encodings = parse_encodings(src).unwrap();
+        assert_eq!(encodings.len(), 1);
+    }
+
+    #[test]
+    fn extract_fields_basic() {
+        let src = r#"
+| 31:28  | 27:24    | 15:0            |
+|--------|----------|-----------------|
+| MCRT   | Emission | LightId {SrcId} |
+| 0b0011 | 0b0001   | _               |
+"#;
+        let encodings = parse_encodings(src).unwrap();
+        let fields = extract_fields(&encodings);
+        assert!(fields.contains(&"MCRT".to_string()));
+        assert!(fields.contains(&"Emission".to_string()));
+    }
+
+    #[test]
+    fn parse_invalid_bits_range() {
+        let src = r#"
+| invalid | 15:0            |
+|---------|-----------------|
+| MCRT    | LightId {SrcId} |
+"#;
+        let result = parse_encodings(src);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn parse_complex_encoding() {
+        let src = r#"
+| 31:24  | 23:22    | 21:20      | 15:0          |
+|--------|----------|------------|---------------|
+| MCRT   | Material | Absorption | MatId {SrcId} |
+| 0b0011 | 0b10     | 0b00       | _             |
+"#;
+        let encodings = parse_encodings(src).unwrap();
+        assert_eq!(encodings.len(), 1);
+        let encoding = &encodings[0];
+        assert_eq!(encoding.0.len(), 4);
+    }
+
+    #[test]
+    fn parse_binary_with_x() {
+        let src = r#"
+| 23:16      | 15:0 |
+|------------|------|
+| EventType  | _    |
+| 0b0001xxxx | _    |
+"#;
+        let encodings = parse_encodings(src).unwrap();
+        assert_eq!(encodings.len(), 1);
+    }
+
+    #[test]
+    fn parse_hex_value() {
+        let src = r#"
+| 15:0 | 15:0  |
+|------|-------|
+| Id   | SrcId |
+| 0x2F | _     |
+"#;
+        let encodings = parse_encodings(src);
+        assert!(encodings.is_ok());
+    }
+
+    #[test]
+    fn resolved_dir_encodings_basic() {
+        let src = r#"
+| 31:28  | 27:24    | 17:16   | 15:0          |
+|--------|----------|---------|---------------|
+| MCRT   | Material | Forward | MatId {SrcId} |
+| 0b0011 | 0b10     | 0b01    | _             |
+"#;
+        let encodings = parse_encodings(src).unwrap();
+        assert_eq!(encodings.len(), 1);
+    }
+
+    #[test]
+    fn extract_fields_no_duplicates() {
+        let src = r#"
+| 31:28  | 27:24    | 15:0            |
+|--------|----------|-----------------|
+| MCRT   | Emission | LightId {SrcId} |
+| 0b0011 | 0b0001   | _               |
+| MCRT   | Material | MatId {SrcId}   |
+| 0b0011 | 0b10     | _               |
+"#;
+        let encodings = parse_encodings(src).unwrap();
+        let fields = extract_fields(&encodings);
+        assert_eq!(fields.iter().filter(|f| *f == "MCRT").count(), 1);
+    }
+}

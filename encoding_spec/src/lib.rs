@@ -93,3 +93,86 @@ pub fn build_decoder(src: &str) -> Result<Trie> {
 
     Ok(trie)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn srcid_from_str_valid() {
+        assert_eq!(SrcId::from_str("SrcId").unwrap(), SrcId::SrcId);
+        assert_eq!(SrcId::from_str("MatSurfId").unwrap(), SrcId::MatSurfId);
+        assert_eq!(SrcId::from_str("MatId").unwrap(), SrcId::MatId);
+        assert_eq!(SrcId::from_str("SurfId").unwrap(), SrcId::SurfId);
+        assert_eq!(SrcId::from_str("LightId").unwrap(), SrcId::LightId);
+        assert_eq!(SrcId::from_str("DetectorId").unwrap(), SrcId::DetectorId);
+        assert_eq!(SrcId::from_str("DetId").unwrap(), SrcId::DetectorId);
+    }
+
+    #[test]
+    fn srcid_from_str_invalid() {
+        assert!(SrcId::from_str("InvalidType").is_err());
+        assert!(SrcId::from_str("").is_err());
+        assert!(SrcId::from_str("SRCID").is_err());
+    }
+
+    #[test]
+    fn srcid_combine_src_id() {
+        let result = SrcId::SrcId.combine(&SrcId::MatSurfId);
+        assert_eq!(result, Some(SrcId::MatSurfId));
+
+        let result = SrcId::SrcId.combine(&SrcId::MatId);
+        assert_eq!(result, Some(SrcId::MatId));
+
+        let result = SrcId::SrcId.combine(&SrcId::LightId);
+        assert_eq!(result, Some(SrcId::LightId));
+
+        let result = SrcId::SrcId.combine(&SrcId::DetectorId);
+        assert_eq!(result, Some(SrcId::DetectorId));
+    }
+
+    #[test]
+    fn srcid_combine_reversed() {
+        let result = SrcId::MatSurfId.combine(&SrcId::SrcId);
+        assert_eq!(result, Some(SrcId::MatSurfId));
+
+        let result = SrcId::MatId.combine(&SrcId::SrcId);
+        assert_eq!(result, Some(SrcId::MatId));
+
+        let result = SrcId::SurfId.combine(&SrcId::SrcId);
+        assert_eq!(result, Some(SrcId::MatId));
+    }
+
+    #[test]
+    fn srcid_combine_same_type() {
+        let result = SrcId::MatSurfId.combine(&SrcId::MatSurfId);
+        assert_eq!(result, Some(SrcId::MatSurfId));
+
+        let result = SrcId::LightId.combine(&SrcId::LightId);
+        assert_eq!(result, Some(SrcId::LightId));
+    }
+
+    #[test]
+    fn srcid_combine_incompatible() {
+        let result = SrcId::LightId.combine(&SrcId::MatId);
+        assert_eq!(result, None);
+
+        let result = SrcId::DetectorId.combine(&SrcId::LightId);
+        assert_eq!(result, None);
+
+        let result = SrcId::MatId.combine(&SrcId::LightId);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn srcid_combine_mat_surf_id_with_mat() {
+        let result = SrcId::MatSurfId.combine(&SrcId::MatId);
+        assert_eq!(result, Some(SrcId::MatId));
+    }
+
+    #[test]
+    fn srcid_combine_mat_surf_id_with_surf() {
+        let result = SrcId::MatSurfId.combine(&SrcId::SurfId);
+        assert_eq!(result, Some(SrcId::SurfId));
+    }
+}

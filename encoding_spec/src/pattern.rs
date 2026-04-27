@@ -220,3 +220,98 @@ pub fn search_trie(trie_node: &TrieNode, pattern: &Pattern) -> Result<(BitsMatch
 
     Ok((bits_match, src_id))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::SrcId;
+    use crate::Trie;
+    use crate::bits::BitsMatch;
+    use crate::trie::{Encoding, Field as TrieField};
+
+    fn make_trie_named(name: &str, mask: u32, value: u32) -> TrieField {
+        TrieField::Named {
+            name: name.to_string(),
+            attr: None,
+            bits: BitsMatch { mask, value },
+            size: 4,
+        }
+    }
+
+    fn make_trie_srcid(src_id: SrcId) -> TrieField {
+        TrieField::SrcId(src_id)
+    }
+
+    fn make_trie_x(size: usize) -> TrieField {
+        TrieField::X { attr: None, size }
+    }
+
+    #[test]
+    fn pattern_new() {
+        let pattern = Pattern(vec![Field::Field("MCRT"), Field::SrcId(SrcId::MatSurfId)]);
+        assert_eq!(pattern.0.len(), 2);
+    }
+
+    #[test]
+    fn search_trie_simple_match() {
+        let mut trie = Trie::new();
+        trie.insert(&Encoding(vec![
+            make_trie_named("MCRT", 0xF0000000, 0x30000000),
+            make_trie_srcid(SrcId::MatSurfId),
+        ]));
+
+        let pattern = Pattern(vec![Field::Field("MCRT"), Field::SrcId(SrcId::MatSurfId)]);
+
+        let result = trie.get(&pattern);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn search_trie_no_match() {
+        let mut trie = Trie::new();
+        trie.insert(&Encoding(vec![
+            make_trie_named("MCRT", 0xF0000000, 0x30000000),
+            make_trie_srcid(SrcId::MatSurfId),
+        ]));
+
+        let pattern = Pattern(vec![Field::Field("Emission"), Field::SrcId(SrcId::LightId)]);
+
+        let result = trie.get(&pattern);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn search_trie_x_consumes() {
+        let mut trie = Trie::new();
+        trie.insert(&Encoding(vec![
+            make_trie_named("MCRT", 0xF0000000, 0x30000000),
+            make_trie_x(4),
+            make_trie_srcid(SrcId::MatId),
+        ]));
+
+        let pattern = Pattern(vec![
+            Field::Field("MCRT"),
+            Field::X,
+            Field::SrcId(SrcId::MatId),
+        ]);
+
+        let result = trie.get(&pattern);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn search_trie_srcid_type_combine() {
+        let mut trie = Trie::new();
+        trie.insert(&Encoding(vec![
+            make_trie_named("MCRT", 0xF0000000, 0x30000000),
+            make_trie_srcid(SrcId::MatSurfId),
+        ]));
+
+        let pattern = Pattern(vec![Field::Field("MCRT"), Field::SrcId(SrcId::SrcId)]);
+
+        let result = trie.get(&pattern);
+        assert!(result.is_ok());
+        let (_bits, src_id) = result.unwrap();
+        assert_eq!(src_id, SrcId::MatSurfId);
+    }
+}

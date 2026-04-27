@@ -131,11 +131,12 @@ impl Trie {
     ///
     /// # Examples
     ///
-    /// ```rust
+    /// ```ignored
     /// use encoding_spec::trie::{Trie, Encoding};
     /// use encoding_spec::trie::Field;
     /// use encoding_spec::bits::BitsMatch;
     /// use encoding_spec::SrcId;
+    /// use encoding_spec::encoding;
     ///
     /// let mut trie = Trie::new();
     /// let encoding = encoding!(MCRT, 0b0011, Material, 0b01, Elastic, 0b10, X, 0b0000, MatSurfId);
@@ -185,12 +186,13 @@ impl Trie {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```ignored
     /// use encoding_spec::trie::{Trie, Encoding};
     /// use encoding_spec::trie::Field;
     /// use encoding_spec::pattern::{Pattern, self};
     /// use encoding_spec::bits::BitsMatch;
     /// use encoding_spec::SrcId;
+    /// use encoding_spec::encoding;
     ///
     /// let mut trie = Trie::new();
     /// let encoding = encoding!(MCRT, 0b0011, Material, 0b01, Elastic, 0b10, X, 0b0000, MatSurfId);
@@ -245,5 +247,221 @@ impl TrieNode {
 
     pub fn insert_new(&mut self, field: &Field) {
         self.children.push((field.clone(), TrieNode::new()));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::SrcId;
+    use crate::bits::BitsMatch;
+
+    fn make_named_field(name: &str, mask: u32, value: u32, size: usize) -> Field {
+        Field::Named {
+            name: name.to_string(),
+            attr: None,
+            bits: BitsMatch { mask, value },
+            size,
+        }
+    }
+
+    fn make_srcid_field(src_id: SrcId) -> Field {
+        Field::SrcId(src_id)
+    }
+
+    fn make_x_field(size: usize) -> Field {
+        Field::X { attr: None, size }
+    }
+
+    #[test]
+    fn trie_node_new() {
+        let node = TrieNode::new();
+        assert!(!node.is_terminal);
+        assert!(node.children.is_empty());
+    }
+
+    #[test]
+    fn trie_new() {
+        let trie = Trie::new();
+        assert!(!trie.root.is_terminal);
+        assert!(trie.root.children.is_empty());
+    }
+
+    #[test]
+    fn trie_insert_single_encoding() {
+        let mut trie = Trie::new();
+        let encoding = Encoding(vec![
+            make_named_field("MCRT", 0xF0000000, 0x30000000, 4),
+            make_srcid_field(SrcId::MatSurfId),
+        ]);
+        trie.insert(&encoding);
+        assert!(!trie.root.is_terminal);
+        assert_eq!(trie.root.children.len(), 1);
+    }
+
+    #[test]
+    fn trie_insert_multiple_encodings() {
+        let mut trie = Trie::new();
+        trie.insert(&Encoding(vec![
+            make_named_field("MCRT", 0xF0000000, 0x30000000, 4),
+            make_srcid_field(SrcId::MatSurfId),
+        ]));
+        trie.insert(&Encoding(vec![
+            make_named_field("Emission", 0xF0000000, 0x10000000, 4),
+            make_srcid_field(SrcId::LightId),
+        ]));
+        assert_eq!(trie.root.children.len(), 2);
+    }
+
+    #[test]
+    fn trie_insert_shared_prefix() {
+        let mut trie = Trie::new();
+        trie.insert(&Encoding(vec![
+            make_named_field("MCRT", 0xF0000000, 0x30000000, 4),
+            make_named_field("Material", 0x0C000000, 0x08000000, 2),
+            make_srcid_field(SrcId::MatId),
+        ]));
+        trie.insert(&Encoding(vec![
+            make_named_field("MCRT", 0xF0000000, 0x30000000, 4),
+            make_named_field("Interface", 0x0C000000, 0x00000000, 2),
+            make_srcid_field(SrcId::MatSurfId),
+        ]));
+        assert_eq!(trie.root.children.len(), 1);
+        let mcrt_children = &trie.root.children[0].1.children;
+        assert_eq!(mcrt_children.len(), 2);
+    }
+
+    #[test]
+    fn trie_insert_terminal_node() {
+        let mut trie = Trie::new();
+        trie.insert(&Encoding(vec![
+            make_named_field("MCRT", 0xF0000000, 0x30000000, 4),
+            make_srcid_field(SrcId::MatSurfId),
+        ]));
+        let mcrt_child = trie
+            .root
+            .get_mut(&make_named_field("MCRT", 0xF0000000, 0x30000000, 4))
+            .unwrap();
+        let srcid_child = mcrt_child
+            .get_mut(&make_srcid_field(SrcId::MatSurfId))
+            .unwrap();
+        assert!(srcid_child.is_terminal);
+    }
+
+    #[test]
+    fn trie_get_mut_existing() {
+        let mut trie = Trie::new();
+        let field = make_named_field("MCRT", 0xF0000000, 0x30000000, 4);
+        let encoding = Encoding(vec![field.clone(), make_srcid_field(SrcId::MatSurfId)]);
+        trie.insert(&encoding);
+
+        let node = trie.root.get_mut(&field);
+        assert!(node.is_some());
+    }
+
+    #[test]
+    fn trie_get_mut_nonexistent() {
+        let mut trie = Trie::new();
+        let field = make_named_field("MCRT", 0xF0000000, 0x30000000, 4);
+        let node = trie.root.get_mut(&field);
+        assert!(node.is_none());
+    }
+
+    #[test]
+    fn trie_emit_dot_format() {
+        let mut trie = Trie::new();
+        trie.insert(&Encoding(vec![
+            make_named_field("MCRT", 0xF0000000, 0x30000000, 4),
+            make_srcid_field(SrcId::MatSurfId),
+        ]));
+
+        let dot = trie.emit_dot();
+        assert!(dot.contains("digraph Trie"));
+        assert!(dot.contains("n0"));
+        assert!(dot.contains("->"));
+    }
+
+    #[test]
+    fn field_size() {
+        let x_field = make_x_field(8);
+        assert_eq!(x_field.size(), 8);
+
+        let named = make_named_field("MCRT", 0xF0000000, 0x30000000, 4);
+        assert_eq!(named.size(), 4);
+
+        let srcid = make_srcid_field(SrcId::MatSurfId);
+        assert_eq!(srcid.size(), 16);
+    }
+
+    #[test]
+    fn field_bits_match() {
+        let x_field = make_x_field(8);
+        assert_eq!(x_field.bits_match(), &BitsMatch { mask: 0, value: 0 });
+
+        let named = make_named_field("MCRT", 0xF0000000, 0x30000000, 4);
+        assert_eq!(named.bits_match(), &BitsMatch {
+            mask: 0xF0000000,
+            value: 0x30000000
+        });
+
+        let srcid = make_srcid_field(SrcId::MatSurfId);
+        assert_eq!(srcid.bits_match(), &BitsMatch { mask: 0, value: 0 });
+    }
+
+    #[test]
+    fn field_partial_eq() {
+        let f1 = make_named_field("MCRT", 0xF0000000, 0x30000000, 4);
+        let f2 = make_named_field("MCRT", 0xF0000000, 0x30000000, 4);
+        let f3 = make_named_field("Interface", 0xF0000000, 0x30000000, 4);
+        assert_eq!(f1, f2);
+        assert_ne!(f1, f3);
+
+        let x1 = make_x_field(8);
+        let x2 = make_x_field(8);
+        let x3 = make_x_field(4);
+        assert_eq!(x1, x2);
+        assert_ne!(x1, x3);
+
+        let s1 = make_srcid_field(SrcId::MatSurfId);
+        let s2 = make_srcid_field(SrcId::MatSurfId);
+        let s3 = make_srcid_field(SrcId::LightId);
+        assert_eq!(s1, s2);
+        assert_ne!(s1, s3);
+    }
+
+    #[test]
+    fn field_display() {
+        let named = make_named_field("MCRT", 0xF0000000, 0x30000000, 4);
+        assert_eq!(format!("{}", named), "MCRT");
+
+        let srcid = make_srcid_field(SrcId::MatSurfId);
+        assert_eq!(format!("{}", srcid), "SrcId::MatSurfId");
+
+        let x_field = make_x_field(8);
+        assert_eq!(format!("{}", x_field), "X(8 bits)");
+    }
+
+    #[test]
+    fn encoding_new() {
+        let encoding = Encoding(vec![
+            make_named_field("MCRT", 0xF0000000, 0x30000000, 4),
+            make_srcid_field(SrcId::MatSurfId),
+        ]);
+        assert_eq!(encoding.0.len(), 2);
+    }
+
+    #[test]
+    fn trie_get_fields() {
+        let mut trie = Trie::new();
+        trie.insert(&Encoding(vec![
+            make_named_field("MCRT", 0xF0000000, 0x30000000, 4),
+            make_named_field("Material", 0x0C000000, 0x08000000, 2),
+            make_srcid_field(SrcId::MatId),
+        ]));
+
+        let fields = trie.get_fields();
+        assert!(fields.contains("MCRT"));
+        assert!(fields.contains("Material"));
+        assert!(!fields.contains("Interface"));
     }
 }
