@@ -105,7 +105,7 @@ pub fn find_uids_with_rule(ledger: &Ledger, rule: &Rule) -> Result<Vec<Uid>> {
             let cond = &mut rule.conds[rule.cond_idx];
             recheck = false;
             match cond {
-                CondTraverse::Pattern { pred, event_match, cnt, } => {
+                CondTraverse::Pattern { pred, event_match, cnt } => {
                     let event_check = event_match.check(rule.uid.event);
                     match pred {
                         Predicate::Unit => {

@@ -332,17 +332,27 @@ impl<'src> Expr<'src> {
             // Perhaps make use of ariadne to properly show diagnostics relevant to code
             Self::Any(exprs) => {
                 let src_id_matches: Vec<_> = exprs
-                        .iter()
-                        .map(|(expr, span)| expr
-                            .resolve_src(src_dict)
+                    .iter()
+                    .map(|(expr, span)| {
+                        expr.resolve_src(src_dict)
                             .map_err(|err| err.with_span(*span))
-                        )
-                        .collect::<Result<_,_>>()?;
-                let src_id_type = src_id_matches.iter().fold(encoding_spec::SrcId::SrcId, |acc, (src_id, _)| {
-                    acc.combine(&src_id).unwrap()
-                });
-                let src_id_match = Match::Any(src_id_matches.into_iter().map(|(_, r#match)| r#match).collect());
-                debug!("Combined any SrcId types into: ({:?}, {:?})", src_id_type, src_id_match);
+                    })
+                    .collect::<Result<_, _>>()?;
+                let src_id_type = src_id_matches
+                    .iter()
+                    .fold(encoding_spec::SrcId::SrcId, |acc, (src_id, _)| {
+                        acc.combine(&src_id).unwrap()
+                    });
+                let src_id_match = Match::Any(
+                    src_id_matches
+                        .into_iter()
+                        .map(|(_, r#match)| r#match)
+                        .collect(),
+                );
+                debug!(
+                    "Combined any SrcId types into: ({:?}, {:?})",
+                    src_id_type, src_id_match
+                );
                 // TODO: flatten nested Any
                 (src_id_type, src_id_match.optimise())
             }
@@ -363,16 +373,17 @@ impl<'src> Expr<'src> {
                 let src_field = match &fields.last() {
                     Some(field) => &field.0,
                     // TODO: Include span information
-                    None => return Err(Error::Unspanned("Pattern must have at least one field (the SrcId)".into())),
+                    None => {
+                        return Err(Error::Unspanned(
+                            "Pattern must have at least one field (the SrcId)".into(),
+                        ));
+                    }
                 };
                 let (src_id_type, src_id_match) = match src_field {
-                    Expr::SrcId(_) | Expr::Any(_) => {
-                        src_field.resolve_src(src_dict)?
-                    }
+                    Expr::SrcId(_) | Expr::Any(_) => src_field.resolve_src(src_dict)?,
                     Expr::Ident(src_ident) => {
                         match resolved_src.get(*src_ident) {
                             Some(ident) => ident.clone(),
-                            // TODO: Include span information
                             None => return Err(Error::Unspanned(format!("Unknown source identifier in pattern: {}", src_ident))),
                         }
                     }
@@ -384,7 +395,10 @@ impl<'src> Expr<'src> {
                     .map(|(field, span)| match field {
                         Expr::X => Ok(pattern::Field::X),
                         Expr::Field(field_id) => Ok(pattern::Field::Field(field_id)),
-                        _ => Err(Error::Spanned{msg:format!("Unexpected expression type in pattern fields: {:?}", field), span: *span}),
+                        _ => Err(Error::Spanned {
+                            msg: format!("Unexpected expression type in pattern fields: {:?}", field),
+                            span: *span,
+                        }),
                     })
                     .collect::<Result<_,_>>()?;
 
@@ -403,7 +417,8 @@ impl<'src> Expr<'src> {
                     .map(|(e, span)| e
                         .resolve_pattern(src_dict, trie, resolved_src)
                         .map_err(|err| err.with_span(*span))
-                    ).collect::<Result<_,_>>()?;
+                    )
+                    .collect::<Result<_, _>>()?;
                 Match::Any(bits_match).optimise()
             }
             _ => return Err(Error::Unspanned(format!("Unexpected expression type for resolving SrcId: {:?}", self))),
@@ -415,7 +430,7 @@ impl<'src> Expr<'src> {
         src_dict: &HashMap<SrcName, DomainSrcId>,
         trie: &Trie,
         resolved_src: &HashMap<&'src str, (encoding_spec::SrcId, Match)>,
-        resolved_pattern: &HashMap<&'src str, Match>
+        resolved_pattern: &HashMap<&'src str, Match>,
     ) -> Result<SeqTree, Error> {
         Ok(match self {
             Self::X => SeqTree::Pattern(Predicate::Unit, Match::X),
@@ -448,15 +463,23 @@ impl<'src> Expr<'src> {
                 if let SeqTree::Pattern(Predicate::Unit, pattern_match) = pred_pattern_match {
                     SeqTree::Pattern(Predicate::Repeat(repetition.clone()), pattern_match)
                 } else {
-                    return Err(Error::Unspanned(format!("Expected a pattern in sequence repetition, found: {:?}", pattern)).with_span(*span));
-                }
-            },
-            Self::Ident(pattern_name) => {
-                match resolved_pattern.get(*pattern_name) {
-                    Some(pattern_match) => SeqTree::Pattern(Predicate::Unit, pattern_match.clone()),
-                    None => return Err(Error::Unspanned(format!("Unknown pattern in sequence: {}", pattern_name))),
+                    return Err(Error::Unspanned(format!(
+                        "Expected a pattern in sequence repetition, found: {:?}",
+                        pattern
+                    ))
+                    .with_span(*span));
                 }
             }
+            // FIXME: Ident could also be a sequence, which results in a nested seq to be flatten
+            Self::Ident(pattern_name) => match resolved_pattern.get(*pattern_name) {
+                Some(pattern_match) => SeqTree::Pattern(Predicate::Unit, pattern_match.clone()),
+                None => {
+                    return Err(Error::Unspanned(format!(
+                        "Unknown pattern in sequence: {}",
+                        pattern_name
+                    )));
+                }
+            },
             Self::Pattern(_expr) => {
                 let pattern_match = self.resolve_pattern(src_dict, trie, resolved_src)?;
                 SeqTree::Pattern(Predicate::Unit, pattern_match)
@@ -469,7 +492,9 @@ impl<'src> Expr<'src> {
                 if let SeqTree::Pattern(Predicate::Unit, pattern_match) = pred_pattern_match {
                     SeqTree::Pattern(Predicate::Not, pattern_match)
                 } else {
-                    return Err(Error::Unspanned(format!("Expected a pattern in negation, found: {:?}", pattern)).with_span(*span));
+                    return Err(Error::Unspanned(
+                        format!("Expected a pattern in negation, found: {:?}", pattern)
+                    ).with_span(*span));
                 }
             }
             _ => return Err(Error::Unspanned(format!("Unexpected expression type for resolving sequence: {:?}", self))),
@@ -485,9 +510,10 @@ impl<'src> Expr<'src> {
         resolved_seq: &HashMap<&'src str, SeqTree>,
     ) -> Result<RuleCond, Error> {
         Ok(match self {
-            Self::Pattern(_) => {
-                RuleCond::Pattern(Predicate::Unit, self.resolve_pattern(src_dict, trie, resolved_src)?)
-            }
+            Self::Pattern(_) => RuleCond::Pattern(
+                Predicate::Unit,
+                self.resolve_pattern(src_dict, trie, resolved_src)?,
+            ),
             Self::Repeat(repetition, boxed) => {
                 let (pattern, span) = boxed.as_ref();
                 // TODO: Also support Ident
@@ -497,22 +523,28 @@ impl<'src> Expr<'src> {
                 if let RuleCond::Pattern(Predicate::Unit, pattern_match) = pred_pattern_match {
                     RuleCond::Pattern(Predicate::Repeat(repetition.clone()), pattern_match)
                 } else {
-                    return Err(Error::Unspanned(format!("Expected a pattern in repetition, found: {:?}", pattern)).with_span(*span));
+                    return Err(Error::Unspanned(
+                        format!("Expected a pattern in repetition, found: {:?}", pattern)
+                    ).with_span(*span));
                 }
             }
             Self::Any(exprs) => RuleCond::Pattern(
                 Predicate::Unit,
-                Match::Any(exprs.iter().map(|(expr, span)|
-                    {
+                Match::Any(exprs
+                    .iter()
+                    .map(|(expr, span)| {
                         let inner_rule_cond = expr
                             .resolve_rule_cond(src_dict, trie, resolved_src, resolved_pattern, resolved_seq)
                             .map_err(|err| err.with_span(*span))?;
                         if let RuleCond::Pattern(Predicate::Unit, pattern_match) = inner_rule_cond {
                             Ok(pattern_match)
                         } else {
-                            Err(Error::Unspanned(format!("Unexpected expression type in condition Any: {:?}", expr)).with_span(*span))
+                            Err(Error::Unspanned(
+                                format!("Unexpected expression type in condition Any: {:?}", expr)
+                            ).with_span(*span))
                         }
-                    }).collect::<Result<_,_>>()?
+                    })
+                    .collect::<Result<_,_>>()?,
                 ).optimise()
             ),
             Self::Seq(_) => {
