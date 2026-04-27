@@ -3,7 +3,78 @@
 This project defines the grammar of our DSL, implements the parser and
 translation to the AST to be used by the filtering methods in `aetherus-events`.
 
+> ![NOTE] While we present the DSL focused here on MCRT simulation,
+> it can filter and parse and encoding that can fitted for `aetherus-events`
+
+## Overview
+
+The Eldritch-Trace DSL is used to specify the criteria we are looking for
+signals of interest to meet, then walk the Ledger to find all terminal UIDs that
+meet these conditions, which are then used to extract the signals from the total
+stream produced by the simulation. 
+
+Example of conditions used for filtering: 
+- emission source
+- interactions with specific objects, 
+- sequence of events
+- count repetitions of events matching a pattern
+- etc.
+
+```json
+{
+  "grps": {},
+  "src_map": {
+    "Mat(1)":         [ { "Mat": "glass"                        }],
+    "Mat(4)":         [ { "Mat": "translucent_pla"              }],
+    "Surf(0)":        [ { "Surf": "TargetTube"                  }],
+    "Surf(1)":        [ { "Surf": "TargetToy"                   }],
+    "MatSurf(65535)": [ { "MatSurf": "Tank-Water:Tank_material" }],
+    "MatSurf(65534)": [ { "MatSurf": "Tank:Tank_material"       }],
+    "Mat(0)":         [ { "Mat": "air"                          }],
+    "MatSurf(65533)": [ { "MatSurf": "Water:Water_material"     }],
+    "Mat(2)":         [ { "Mat": "mist"                         }],
+    "Mat(3)":         [ { "Mat": "seawater"                     }]
+  },
+  "start_events": [
+    { "seq_id": 0, "event": "0x1010000" }
+  ],
+  "next_mat_id": 5,
+  "next_surf_id": 2,
+  "next_matsurf_id": 65532,
+  "next_light_id": 0,
+  "next": {
+    "0": { "0x01010000": 1 },
+    "1": { "0x0300FFFE": 17, "0x0301FFFE": 2 },
+    "2": { "0x0300FFFF": 211, "0x03010003": 3, "0x03A0FFFE": 2663 },
+    "3": {
+      "0x0300FFFD": 21,
+      "0x0300FFFF": 24,
+      "0x0301FFFF": 4,
+      "0x03440000": 14,
+      "0x03440001": 99,
+      "0x03A00003": 194,
+    },
+    "4": { "0x0300FFFE": 6 },
+    // ... more entries ...
+  },
+  "prev": {
+    "1": "0, 0x01010000",
+    "2": "1, 0x0301FFFE",
+    "3": "2, 0x03010003",
+    "4": "3, 0x0301FFFF",
+    "5": "4, 0x03010000",
+    "6": "4, 0x0300FFFE",
+    "7": "6, 0x0300FFFF",
+    // ... more entries ...
+  }
+}
+```
+<img src="./imgs/script_dsl_syntax_highlighted.png" alt="Eldritch-Trace DSL script">
+
 ## Specification
+
+![Eldritch-Trace with Aetherus-Events
+Architecture](./imgs/DSL_Filtering_Architecture.excalidraw.png)
 
 ## Predicates
 
