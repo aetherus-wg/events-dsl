@@ -1,10 +1,7 @@
 use chumsky::span::SimpleSpan;
 
 pub enum Error {
-    Spanned {
-        span: SimpleSpan,
-        msg: String,
-    },
+    Spanned { span: SimpleSpan, msg: String },
     Unspanned(String),
 }
 

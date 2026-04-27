@@ -1,16 +1,20 @@
-pub mod token;
 pub mod ast;
-pub mod parse;
-pub mod model;
-pub mod evaluate;
 pub mod error;
+pub mod evaluate;
+pub mod model;
+pub mod parse;
+pub mod token;
 
-use std::{collections::HashSet, path::Path};
+use crate::{
+    ast::{Declaration, Expr},
+    parse::expr_parser,
+    token::lexer,
+};
 use ariadne::{Color, Label, Report, ReportKind, sources};
-use chumsky::{input::Input, Parser, error::Rich, span::SimpleSpan};
-use log::debug;
-use crate::{ast::{Declaration, Expr}, parse::expr_parser, token::lexer};
+use chumsky::{Parser, error::Rich, input::Input, span::SimpleSpan};
 use itertools::Itertools;
+use log::debug;
+use std::{collections::HashSet, path::Path};
 
 pub type Span = SimpleSpan;
 pub type Spanned<T> = (T, Span);
@@ -25,15 +29,18 @@ trait Check<T> {
 pub fn extract_ledger_path(
     declarations: &Vec<Declaration>,
     script_src: &str,
-    script_filepath: &Path
+    script_filepath: &Path,
 ) -> Option<std::path::PathBuf> {
-    let script_dirname = &script_filepath.parent().unwrap_or_else(|| std::path::Path::new("."));
+    let script_dirname = &script_filepath
+        .parent()
+        .unwrap_or_else(|| std::path::Path::new("."));
     let mut ledger_path = None;
     for decl in declarations.iter() {
         match decl.body {
             (Expr::LedgerPath(path), span) => {
                 if let Some((_, first_span)) = ledger_path {
-                    failure("Multiple ledger/photons paths specified".to_string(),
+                    failure(
+                        "Multiple ledger/photons paths specified".to_string(),
                         ("another declaration here".to_string(), span),
                         [("first declaration here".to_string(), first_span)],
                         script_src,
@@ -41,8 +48,8 @@ pub fn extract_ledger_path(
                 } else {
                     ledger_path = Some((script_dirname.join(path), span));
                 }
-            },
-            _                           => (),
+            }
+            _ => (),
         }
     }
 
@@ -55,15 +62,18 @@ pub fn extract_ledger_path(
 pub fn extract_signals_path(
     declarations: &Vec<Declaration>,
     script_src: &str,
-    script_filepath: &Path
+    script_filepath: &Path,
 ) -> Option<std::path::PathBuf> {
-    let script_dirname = &script_filepath.parent().unwrap_or_else(|| std::path::Path::new("."));
+    let script_dirname = &script_filepath
+        .parent()
+        .unwrap_or_else(|| std::path::Path::new("."));
     let mut signals_path = None;
     for decl in declarations.iter() {
         match decl.body {
             (Expr::SignalsPath(path), span) => {
                 if let Some((_, first_span)) = signals_path {
-                    failure("Multiple signals paths specified".to_string(),
+                    failure(
+                        "Multiple signals paths specified".to_string(),
                         ("another declaration here".to_string(), span),
                         [("first declaration here".to_string(), first_span)],
                         script_src,
@@ -71,8 +81,8 @@ pub fn extract_signals_path(
                 } else {
                     signals_path = Some((script_dirname.join(path), span));
                 }
-            },
-            _                           => (),
+            }
+            _ => (),
         }
     }
 
@@ -87,7 +97,7 @@ pub fn extract_signals_path(
 // -----------------------------------------------
 pub fn parse_script<'src>(
     script_src: &'src str,
-    field_dict: &HashSet<String>
+    field_dict: &HashSet<String>,
 ) -> Vec<Declaration<'src>> {
     let tokens = lexer(&field_dict)
         .parse(script_src)

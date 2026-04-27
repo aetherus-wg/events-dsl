@@ -1,11 +1,19 @@
 use std::collections::HashMap;
 
 use aetherus_events::{SrcId as DomainSrcId, ledger::SrcName};
-use encoding_spec::{pattern::{self, Pattern}, trie::Trie, bits::BitsMatch};
+use encoding_spec::{
+    bits::BitsMatch,
+    pattern::{self, Pattern},
+    trie::Trie,
+};
 use log::debug;
 
-use crate::{ast::{DeclType, Declaration, Expr, Repetition, SrcId}, error::Error, failure};
 use crate::Check;
+use crate::{
+    ast::{DeclType, Declaration, Expr, Repetition, SrcId},
+    error::Error,
+    failure,
+};
 
 // -------------------------------------------------
 // AST -> Semantics Model
@@ -21,16 +29,18 @@ pub enum Match {
 }
 
 impl Match {
-
     pub fn optimise(self) -> Self {
         match self {
             Match::And(ref left, ref right) => match (left.as_ref(), right.as_ref()) {
                 (Match::Bits(bits1), Match::Bits(bits2)) => Match::Bits(bits1.combine(&bits2)),
                 (Match::X, other) | (other, Match::X) => other.clone().optimise(),
                 _ => self,
-            }
+            },
             Match::Any(matches) => {
-                assert!(!matches.is_empty(), "Any match should have at least one inner match");
+                assert!(
+                    !matches.is_empty(),
+                    "Any match should have at least one inner match"
+                );
 
                 let mut flattened = Vec::new();
                 for m in matches.into_iter() {
@@ -72,10 +82,11 @@ impl Check<u32> for Match {
     }
 }
 
-impl Check<&[u32]> for Match
-{
+impl Check<&[u32]> for Match {
     fn check(&self, events_chain: &[u32]) -> bool {
-        events_chain.iter().all(|event_encoded| self.check(*event_encoded))
+        events_chain
+            .iter()
+            .all(|event_encoded| self.check(*event_encoded))
     }
 }
 
@@ -115,10 +126,8 @@ impl SrcId<'_> {
     }
 }
 
-
 #[derive(Debug)]
-pub enum Value<'src, T>
-{
+pub enum Value<'src, T> {
     X,
     Ident(&'src str),
     Primitive(T),
@@ -201,8 +210,7 @@ pub fn resolve_ast(
     declarations: &Vec<Declaration>,
     src_dict: &HashMap<SrcName, DomainSrcId>,
     trie: &Trie,
-) -> HashMap<String, Rule>
-{
+) -> HashMap<String, Rule> {
     let mut resolved_src_dict = HashMap::new();
     for decl in declarations.iter() {
         let (expr, span) = &decl.body;
@@ -222,7 +230,7 @@ pub fn resolve_ast(
 
                 debug!("Resolved {:?} into: {:?}", expr, resolved_src_id);
                 resolved_src_dict.insert(decl.name, resolved_src_id);
-            },
+            }
             _ => (),
         }
     }
@@ -245,7 +253,7 @@ pub fn resolve_ast(
                     });
                 debug!("Resolved {:?} into: {:?}", expr, resolved_pattern);
                 resolved_pattern_dict.insert(decl.name, resolved_pattern);
-            },
+            }
             _ => (),
         }
     }
@@ -268,7 +276,7 @@ pub fn resolve_ast(
                     });
                 debug!("Resolved {:?} into: {:?}", expr, resolved_seq);
                 resolved_seq_dict.insert(decl.name, resolved_seq);
-            },
+            }
             _ => (),
         }
     }
@@ -279,7 +287,13 @@ pub fn resolve_ast(
         match &decl.decl_type {
             DeclType::Rule => {
                 let resolved_rule = expr
-                    .resolve_rule(&src_dict, &trie, &resolved_src_dict, &resolved_pattern_dict, &resolved_seq_dict)
+                    .resolve_rule(
+                        &src_dict,
+                        &trie,
+                        &resolved_src_dict,
+                        &resolved_pattern_dict,
+                        &resolved_seq_dict,
+                    )
                     .unwrap_or_else(|e| {
                         let err = e.with_span(*span);
                         failure(
@@ -291,7 +305,7 @@ pub fn resolve_ast(
                     });
                 debug!("Resolved {:?} into: {:?}", expr, resolved_rule);
                 resolved_rule_dict.insert(decl.name.to_owned(), resolved_rule);
-            },
+            }
             _ => (),
         }
     }
@@ -300,9 +314,11 @@ pub fn resolve_ast(
 }
 
 impl<'src> Expr<'src> {
-    pub fn resolve_src(&self, src_dict: &HashMap<SrcName, DomainSrcId>) -> Result<(encoding_spec::SrcId, Match), Error> {
-        Ok(
-        match self {
+    pub fn resolve_src(
+        &self,
+        src_dict: &HashMap<SrcName, DomainSrcId>,
+    ) -> Result<(encoding_spec::SrcId, Match), Error> {
+        Ok(match self {
             Self::X => (encoding_spec::SrcId::SrcId, Match::X),
             Self::SrcId(src_id) => {
                 debug!("Resolving source identifier: {:?}", src_id);
@@ -311,7 +327,7 @@ impl<'src> Expr<'src> {
                         .bits_match()
                         .into();
                 (src_id.clone().into(), Match::Bits(src_bits_match))
-            },
+            }
             // TODO: If error occur extract the span and propagate it back as Result
             // Perhaps make use of ariadne to properly show diagnostics relevant to code
             Self::Any(exprs) => {
@@ -339,7 +355,7 @@ impl<'src> Expr<'src> {
         &self,
         src_dict: &HashMap<SrcName, DomainSrcId>,
         trie: &Trie,
-        resolved_src: &HashMap<&'src str, (encoding_spec::SrcId, Match)>
+        resolved_src: &HashMap<&'src str, (encoding_spec::SrcId, Match)>,
     ) -> Result<Match, Error> {
         Ok(match self {
             Self::X => Match::X,

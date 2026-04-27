@@ -13,8 +13,7 @@ pub type Spanned<T> = (T, Span);
 /// The ledger holds the mapping of the SrcId names and their encoded value,
 /// hence the need to map to the resolved ledger::SrcId
 #[derive(Debug, Clone)]
-pub enum SrcId<'src>
-{
+pub enum SrcId<'src> {
     None,
     // Resolved
     Mat(u16),
@@ -34,7 +33,11 @@ macro_rules! get_src_id {
     ($subt:ident, $name:expr, $dict:expr) => {
         match $dict.get(&SrcName::$subt($name)) {
             Some(src_id) => Ok(src_id.clone()),
-            None => Err(Error::Unspanned(format!("Unknown source name: {}(\"{}\")", stringify!($subt), $name))),
+            None => Err(Error::Unspanned(format!(
+                "Unknown source name: {}(\"{}\")",
+                stringify!($subt),
+                $name
+            ))),
         }
     };
 }
@@ -79,13 +82,13 @@ impl<'a> SrcId<'a> {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Repetition {
-    Unit,         // '' Pass-through, no repetition = {1,1}
-    Optional,     // '?' = {0,1}
-    OneOrMore,    // '+' = {1,}
-    ZeroOrMore,   // '*' = {0,}
-    NTimes(usize),  // '{n}' = {n,n}
-    AtLeast(usize), //'{n,}': + = {1,}, * = {0,}
-    AtMost(usize),  // '{,m}' = {0,m}
+    Unit,                   // '' Pass-through, no repetition = {1,1}
+    Optional,               // '?' = {0,1}
+    OneOrMore,              // '+' = {1,}
+    ZeroOrMore,             // '*' = {0,}
+    NTimes(usize),          // '{n}' = {n,n}
+    AtLeast(usize),         //'{n,}': + = {1,}, * = {0,}
+    AtMost(usize),          // '{,m}' = {0,m}
     Interval(usize, usize), // '{n,m}': ? = {0,1}
 }
 

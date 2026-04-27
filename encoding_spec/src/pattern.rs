@@ -190,7 +190,11 @@ pub fn search_trie(trie_node: &TrieNode, pattern: &Pattern) -> Result<(BitsMatch
             pattern
         ));
     }
-    debug!("Found {} encodings matching pattern: {:?}", encodings.len(), encodings);
+    debug!(
+        "Found {} encodings matching pattern: {:?}",
+        encodings.len(),
+        encodings
+    );
 
     // Combine all encodings into one BitsMatch with mask covering all bits and value being the OR of all values
     // FIXME: Replace with combination instead of retruning first match

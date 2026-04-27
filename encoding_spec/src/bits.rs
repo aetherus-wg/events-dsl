@@ -1,7 +1,7 @@
-use anyhow::{anyhow, Error, Result};
+use anyhow::{Error, Result, anyhow};
 use std::str::FromStr;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct BitsRange(usize, usize); // (end, start) - "end:start" Verilog style
 
 impl BitsRange {
@@ -53,7 +53,11 @@ impl Into<aetherus_events::filter::BitsMatch> for BitsMatch {
 
 impl std::fmt::Debug for BitsMatch {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "BitsMatch {{ mask: 0x{:x}, value: 0x{:x} }}", self.mask, self.value)
+        write!(
+            f,
+            "BitsMatch {{ mask: 0x{:x}, value: 0x{:x} }}",
+            self.mask, self.value
+        )
     }
 }
 

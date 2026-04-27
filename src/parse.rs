@@ -1,6 +1,9 @@
 use chumsky::{input::ValueInput, prelude::*};
 
-use crate::{ast::{Declaration, DeclType, Expr, Repetition, SrcId}, token::Token};
+use crate::{
+    ast::{DeclType, Declaration, Expr, Repetition, SrcId},
+    token::Token,
+};
 
 pub type Span = SimpleSpan;
 pub type Spanned<T> = (T, Span);
@@ -10,51 +13,45 @@ pub fn expr_parser<'tokens, 'src: 'tokens, I>()
 where
     I: ValueInput<'tokens, Token = Token<'src>, Span = Span>,
 {
-    let src_id_name = select!{Token::SrcId(ty) => ty}
+    let src_id_name = select! {Token::SrcId(ty) => ty}
         .then(
-            select!{Token::Str(ident) => ident}
+            select! {Token::Str(ident) => ident}
                 .delimited_by(just(Token::Ctrl('(')), just(Token::Ctrl(')')))
         )
-        .map_with(|(ty, ident), e| {
-            match SrcId::parse_name(ty, ident) {
-                Ok(src_id) => (Expr::SrcId(src_id), e.span()),
-                Err(err) => {
-                    let span = e.span();
-                    e.emit(chumsky::prelude::Rich::custom(span, err.to_string()));
-                    (Expr::X, span)
-                }
+        .map_with(|(ty, ident), e| match SrcId::parse_name(ty, ident) {
+            Ok(src_id) => (Expr::SrcId(src_id), e.span()),
+            Err(err) => {
+                let span = e.span();
+                e.emit(chumsky::prelude::Rich::custom(span, err.to_string()));
+                (Expr::X, span)
             }
         });
-    let src_id_val = select!{Token::SrcId(ty) => ty}
+    let src_id_val = select! {Token::SrcId(ty) => ty}
         .then(
-            select!{Token::Num(val) => val}
+            select! {Token::Num(val) => val}
                 .delimited_by(just(Token::Ctrl('(')), just(Token::Ctrl(')')))
         )
-        .map_with(|(ty, id), e| {
-            match SrcId::parse_id(ty, id) {
-                Ok(src_id) => (Expr::SrcId(src_id), e.span()),
-                Err(err) => {
-                    let span = e.span();
-                    e.emit(chumsky::prelude::Rich::custom(span, err.to_string()));
-                    (Expr::X, span)
-                }
+        .map_with(|(ty, id), e| match SrcId::parse_id(ty, id) {
+            Ok(src_id) => (Expr::SrcId(src_id), e.span()),
+            Err(err) => {
+                let span = e.span();
+                e.emit(chumsky::prelude::Rich::custom(span, err.to_string()));
+                (Expr::X, span)
             }
         });
     let src_id = src_id_name.or(src_id_val).labelled("source identifier");
 
-
     let src_id_any = recursive(|src_id_any| {
-
-        let src_id_items =
-            src_id.clone()
+        let src_id_items = src_id
+            .clone()
             .or(src_id_any.clone())
             .separated_by(just(Token::Ctrl(',')))
             .collect::<Vec<_>>();
 
         just(Token::Any)
-        .ignore_then(src_id_items.delimited_by(just(Token::Ctrl('[')), just(Token::Ctrl(']'))))
-        .map_with(|src_id_items, e| (Expr::Any(src_id_items), e.span()))
-        .boxed()
+            .ignore_then(src_id_items.delimited_by(just(Token::Ctrl('[')), just(Token::Ctrl(']'))))
+            .map_with(|src_id_items, e| (Expr::Any(src_id_items), e.span()))
+            .boxed()
     });
 
     let x = just(Token::X).map_with(|_, e| (Expr::X, e.span()));
@@ -119,7 +116,7 @@ where
     //        )),
     //    ));
 
-    let field = select!{
+    let field = select! {
             Token::FieldId(f) => Expr::Field(f),
             Token::X          => Expr::X,
         }
@@ -133,7 +130,7 @@ where
 
     let pattern = fields
         .then_ignore(just(Token::Concat))
-        .then(src_id_value .clone())
+        .then(src_id_value.clone())
         .map_with(|(fields, src_id), e| {
             let mut all_fields = fields;
             all_fields.push(src_id);
@@ -142,23 +139,24 @@ where
         .boxed()
         .labelled("pattern construction to match event encoding in UID");
 
-    let inline_pattern = pattern.clone()
-        .or(
-            select!{Token::Ident(ident) => ident}
-                .map_with(|ident, e| (Expr::Ident(ident), e.span()))
-        );
+    let inline_pattern =
+        pattern.clone().or(select! {Token::Ident(ident) => ident}
+            .map_with(|ident, e| (Expr::Ident(ident), e.span())));
 
-    let inline_pattern_items = inline_pattern.clone()
+    let inline_pattern_items = inline_pattern
+        .clone()
         .separated_by(just(Token::Ctrl(',')))
         .collect::<Vec<_>>();
 
-    let pattern_any =
-            just(Token::Any)
-            .ignore_then(inline_pattern_items.delimited_by(just(Token::Ctrl('[')), just(Token::Ctrl(']'))))
-            .map_with(|patterns, e| (Expr::Any(patterns), e.span()))
-            .labelled("pattern any set");
+    let pattern_any = just(Token::Any)
+        .ignore_then(
+            inline_pattern_items.delimited_by(just(Token::Ctrl('[')), just(Token::Ctrl(']'))),
+        )
+        .map_with(|patterns, e| (Expr::Any(patterns), e.span()))
+        .labelled("pattern any set");
 
-    let pattern_value = inline_pattern.clone()
+    let pattern_value = inline_pattern
+        .clone()
         .or(pattern_any)
         .or(x)
         .labelled("pattern value")
@@ -204,9 +202,9 @@ where
         .or(pattern_value.clone())
         .boxed();
 
-
-    let seq = recursive(|seq|{
-        let seq_items = predicated_pattern.clone()
+    let seq = recursive(|seq| {
+        let seq_items = predicated_pattern
+            .clone()
             .or(seq.clone())
             .separated_by(just(Token::Ctrl(',')))
             .allow_trailing()
@@ -221,7 +219,10 @@ where
 
     let decl_ledger = just(Token::Ledger)
         .ignore_then(just(Token::Ctrl('=')))
-        .ignore_then(select!{Token::Str(path) => path}.map_with(|path, e| (Expr::LedgerPath(path), e.span())))
+        .ignore_then(
+            select! {Token::Str(path) => path}
+                .map_with(|path, e| (Expr::LedgerPath(path), e.span())),
+        )
         .map_with(|expr, e| Declaration {
             name: "ledger",
             decl_type: DeclType::LedgerPath,
@@ -233,7 +234,10 @@ where
 
     let decl_signals = just(Token::Signals)
         .ignore_then(just(Token::Ctrl('=')))
-        .ignore_then(select!{Token::Str(path) => path}.map_with(|path, e| (Expr::SignalsPath(path), e.span())))
+        .ignore_then(
+            select! {Token::Str(path) => path}
+                .map_with(|path, e| (Expr::SignalsPath(path), e.span())),
+        )
         .map_with(|expr, e| Declaration {
             name: "signals",
             decl_type: DeclType::SignalsPath,
@@ -244,7 +248,7 @@ where
         .boxed();
 
     let decl_src = just(Token::SrcDecl)
-        .ignore_then(select!{Token::Ident(ident) => ident})
+        .ignore_then(select! {Token::Ident(ident) => ident})
         .then_ignore(just(Token::Ctrl('=')))
         .then(src_id_value)
         .map_with(|(name, src_id_val), e| Declaration {
@@ -257,7 +261,7 @@ where
         .boxed();
 
     let decl_pattern = just(Token::PatternDecl)
-        .ignore_then(select!{Token::Ident(ident) => ident})
+        .ignore_then(select! {Token::Ident(ident) => ident})
         .then_ignore(just(Token::Ctrl('=')))
         .then(pattern)
         .map_with(|(name, pattern), e| Declaration {
@@ -270,7 +274,7 @@ where
         .boxed();
 
     let decl_seq = just(Token::SeqDecl)
-        .ignore_then(select!{Token::Ident(ident) => ident})
+        .ignore_then(select! {Token::Ident(ident) => ident})
         .then_ignore(just(Token::Ctrl('=')))
         .then(seq.clone())
         .map_with(|(name, seq), e| Declaration {
@@ -282,8 +286,7 @@ where
         .labelled("sequence declaration")
         .boxed();
 
-    let condition = predicated_pattern.clone()
-        .or(seq);
+    let condition = predicated_pattern.clone().or(seq);
 
     let condition_items = condition
         .separated_by(just(Token::Ctrl(',')))
@@ -292,7 +295,7 @@ where
         .map_with(|items, e| (items, e.span()));
 
     let decl_rule = just(Token::RuleDecl)
-        .ignore_then(select!{Token::Ident(ident) => ident})
+        .ignore_then(select! {Token::Ident(ident) => ident})
         .then_ignore(just(Token::Ctrl('=')))
         .then(condition_items.delimited_by(just(Token::Ctrl('{')), just(Token::Ctrl('}'))))
         .map_with(|(name, (items, items_span)), e| Declaration {

@@ -1,12 +1,16 @@
-use crate::{SrcId, bits::BitsMatch, pattern::{Pattern, search_trie}};
+use crate::{
+    SrcId,
+    bits::BitsMatch,
+    pattern::{Pattern, search_trie},
+};
+use anyhow::{Error, Result, anyhow};
 use std::{collections::HashSet, str::FromStr};
-use anyhow::{anyhow, Error, Result};
 
 #[derive(Debug, Clone, Hash)]
 pub enum Field {
     X {
         attr: Option<String>,
-        size: usize
+        size: usize,
     },
     SrcId(SrcId),
     Named {
@@ -60,7 +64,7 @@ impl std::fmt::Display for Field {
 impl PartialEq for Field {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (Field::X{size: bits1, ..}, Field::X{size: bits2, ..}) => bits1 == bits2,
+            (Field::X { size: bits1, .. }, Field::X { size: bits2, .. }) => bits1 == bits2,
             (
                 Field::Named {
                     name: name1,
@@ -127,10 +131,13 @@ impl Trie {
     ///
     /// # Examples
     ///
-    /// ```
-    /// use md_parse::Trie;
-    /// let mut trie = Trie::new();
+    /// ```rust
+    /// use encoding_spec::trie::{Trie, Encoding};
+    /// use encoding_spec::trie::Field;
+    /// use encoding_spec::bits::BitsMatch;
+    /// use encoding_spec::SrcId;
     ///
+    /// let mut trie = Trie::new();
     /// let encoding = encoding!(MCRT, 0b0011, Material, 0b01, Elastic, 0b10, X, 0b0000, MatSurfId);
     ///
     /// trie.insert(encoding);
@@ -179,9 +186,13 @@ impl Trie {
     /// # Examples
     ///
     /// ```
-    /// use encoding_spec::Trie;
-    /// let mut trie = Trie::new();
+    /// use encoding_spec::trie::{Trie, Encoding};
+    /// use encoding_spec::trie::Field;
+    /// use encoding_spec::pattern::{Pattern, self};
+    /// use encoding_spec::bits::BitsMatch;
+    /// use encoding_spec::SrcId;
     ///
+    /// let mut trie = Trie::new();
     /// let encoding = encoding!(MCRT, 0b0011, Material, 0b01, Elastic, 0b10, X, 0b0000, MatSurfId);
     ///
     /// trie.insert(encoding);
@@ -192,8 +203,7 @@ impl Trie {
     ///     pattern::Field::X,
     ///     pattern::Field::SrcId(SrcId::MatId),
     /// ]);
-    ///
-    /// let (bits_match, src_id_type)= trie.get(&pattern)?;
+    /// let (bits_match, src_id_type) = trie.get(&pattern).unwrap();
     /// assert_eq!(bits_match, BitsMatch{mask: 0x0ff00000, value: 0x03600000});
     /// ```
     pub fn get(&self, query: &Pattern) -> Result<(BitsMatch, SrcId)> {

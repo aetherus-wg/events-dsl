@@ -1,13 +1,16 @@
 use std::{fmt::Display, str::FromStr};
 
-use anyhow::{Error, anyhow, Result};
+use anyhow::{Error, Result, anyhow};
 
-use crate::{parser::{parse_encodings, resolved_dir_encodings}, trie::Trie};
+use crate::{
+    parser::{parse_encodings, resolved_dir_encodings},
+    trie::Trie,
+};
 
-pub mod parser;
-pub mod trie;
 pub mod bits;
+pub mod parser;
 pub mod pattern;
+pub mod trie;
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum SrcId {
