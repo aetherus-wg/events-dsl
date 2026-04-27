@@ -1,0 +1,10 @@
+[book]
+title = "Eldritch-Trace Documentation"
+description = "User Guide and Languare Reference Manual for .et DSL"
+authors = ["Cristian Bourceanu"]
+
+[output.html]
+git-repository-url = "https://github.com/aetherus-wg/eldritch-trace"
+
+#[output.linkcheck]
+#exclude = [ 'crates\.io' ]
