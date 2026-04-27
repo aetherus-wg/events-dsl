@@ -1,5 +1,6 @@
 use chumsky::span::SimpleSpan;
 
+#[derive(Debug)]
 pub enum Error {
     Spanned { span: SimpleSpan, msg: String },
     Unspanned(String),
@@ -23,7 +24,7 @@ impl Error {
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Error::Spanned { span, msg } => write!(f, "Error: {}", msg),
+            Error::Spanned { span:_, msg } => write!(f, "Error: {}", msg),
             Error::Unspanned(msg) => write!(f, "Error: {}", msg),
         }
     }

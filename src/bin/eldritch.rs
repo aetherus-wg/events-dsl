@@ -4,7 +4,7 @@ use aetherus_events::{
 };
 use anyhow::Result;
 use env_logger::Env;
-use filter_dsl::{extract_ledger_path, extract_signals_path, model::resolve_ast, parse_script};
+use eldritch_dsl::{extract_ledger_path, extract_signals_path, model::resolve_ast, parse_script};
 use std::{collections::HashMap, env, fs, path::Path};
 
 use log::info;

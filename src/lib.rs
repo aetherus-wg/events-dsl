@@ -22,7 +22,7 @@ pub type Spanned<T> = (T, Span);
 // -----------------------------------------------
 // Model traits and helpers
 // -----------------------------------------------
-trait Check<T> {
+pub trait Check<T> {
     fn check(&self, value: T) -> bool;
 }
 

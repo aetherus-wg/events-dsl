@@ -1,5 +1,5 @@
 [package]
-name = "filter-dsl"
+name = "eldritch-dsl"
 version = "0.6.0"
 edition = "2024"
 

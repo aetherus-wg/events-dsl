@@ -19,7 +19,7 @@ use crate::{
 // AST -> Semantics Model
 // -------------------------------------------------
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Match {
     X,
     Bits(BitsMatch),
@@ -67,6 +67,12 @@ impl Match {
             }
             other => other,
         }
+    }
+}
+
+impl From<BitsMatch> for Match {
+    fn from(bits: BitsMatch) -> Self {
+        Match::Bits(bits)
     }
 }
 
