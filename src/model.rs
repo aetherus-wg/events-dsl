@@ -1,11 +1,11 @@
 use std::collections::HashMap;
 
-use aetherus_events::{Ledger, SrcId as DomainSrcId, ledger::{SrcName, Uid}};
-use anyhow::{Context, Result, anyhow};
+use aetherus_events::{SrcId as DomainSrcId, ledger::SrcName};
 use encoding_spec::{pattern::{self, Pattern}, trie::Trie, bits::BitsMatch};
-use log::{debug, error};
+use log::debug;
 
-use crate::ast::{DeclType, Declaration, Expr, Repetition, SrcId};
+use crate::{ast::{DeclType, Declaration, Expr, Repetition, SrcId}, error::Error, failure};
+use crate::Check;
 
 // -------------------------------------------------
 // AST -> Semantics Model
@@ -18,10 +18,6 @@ pub enum Match {
     Not(Box<Match>),
     And(Box<Match>, Box<Match>),
     Any(Vec<Match>),
-}
-
-trait Check<T> {
-    fn check(&self, value: T) -> bool;
 }
 
 impl Match {
@@ -201,17 +197,29 @@ pub struct Rule(pub Vec<RuleCond>);
 // Processing AST into Semantics Model
 // -------------------------------------------------
 pub fn resolve_ast(
-      declarations: &Vec<Declaration>,
-      src_dict: &HashMap<SrcName, DomainSrcId>,
-      trie: &Trie,
-) -> Result<HashMap<String, Rule>>
+    src: &str,
+    declarations: &Vec<Declaration>,
+    src_dict: &HashMap<SrcName, DomainSrcId>,
+    trie: &Trie,
+) -> HashMap<String, Rule>
 {
     let mut resolved_src_dict = HashMap::new();
     for decl in declarations.iter() {
         let (expr, span) = &decl.body;
         match &decl.decl_type {
             DeclType::SrcId => {
-                let resolved_src_id = expr.resolve_src(&src_dict).expect("Failed to resolve source identifier");
+                let resolved_src_id = expr
+                    .resolve_src(&src_dict)
+                    .unwrap_or_else(|e| {
+                        let err = e.with_span(*span);
+                        failure(
+                            format!("Failed to resolve source identifier {:?}: {}", expr, err.to_string()),
+                            ("not found inside Ledger".into(), err.span().unwrap()),
+                            None,
+                            src,
+                        )
+                    });
+
                 debug!("Resolved {:?} into: {:?}", expr, resolved_src_id);
                 resolved_src_dict.insert(decl.name, resolved_src_id);
             },
@@ -224,7 +232,17 @@ pub fn resolve_ast(
         let (expr, span) = &decl.body;
         match &decl.decl_type {
             DeclType::Pattern => {
-                let resolved_pattern = expr.resolve_pattern(&src_dict, &trie, &resolved_src_dict).context("Failed to resolve pattern")?;
+                let resolved_pattern = expr
+                    .resolve_pattern(&src_dict, &trie, &resolved_src_dict)
+                    .unwrap_or_else(|e| {
+                        let err = e.with_span(*span);
+                        failure(
+                            format!("Failed to resolve pattern {:?}: {}", expr, err.to_string()),
+                            ("not found inside Trie".into(), err.span().unwrap()),
+                            None,
+                            src,
+                        );
+                    });
                 debug!("Resolved {:?} into: {:?}", expr, resolved_pattern);
                 resolved_pattern_dict.insert(decl.name, resolved_pattern);
             },
@@ -237,7 +255,17 @@ pub fn resolve_ast(
         let (expr, span) = &decl.body;
         match &decl.decl_type {
             DeclType::Sequence => {
-                let resolved_seq = expr.resolve_seq(&src_dict, &trie, &resolved_src_dict, &resolved_pattern_dict).context("Failed to resolve sequence")?;
+                let resolved_seq = expr
+                    .resolve_seq(&src_dict, &trie, &resolved_src_dict, &resolved_pattern_dict)
+                    .unwrap_or_else(|e| {
+                        let err = e.with_span(*span);
+                        failure(
+                            format!("Failed to resolve sequence {:?}: {}", expr, err.to_string()),
+                            ("failed to resolve sequence".into(), err.span().unwrap()),
+                            None,
+                            src,
+                        );
+                    });
                 debug!("Resolved {:?} into: {:?}", expr, resolved_seq);
                 resolved_seq_dict.insert(decl.name, resolved_seq);
             },
@@ -250,7 +278,17 @@ pub fn resolve_ast(
         let (expr, span) = &decl.body;
         match &decl.decl_type {
             DeclType::Rule => {
-                let resolved_rule = expr.resolve_rule(&src_dict, &trie, &resolved_src_dict, &resolved_pattern_dict, &resolved_seq_dict).context("Failed to resolve rule")?;
+                let resolved_rule = expr
+                    .resolve_rule(&src_dict, &trie, &resolved_src_dict, &resolved_pattern_dict, &resolved_seq_dict)
+                    .unwrap_or_else(|e| {
+                        let err = e.with_span(*span);
+                        failure(
+                            format!("Failed to resolve rule {:?}: {}", expr, err.to_string()),
+                            ("failed to resolve rule".into(), err.span().unwrap()),
+                            None,
+                            src,
+                        );
+                    });
                 debug!("Resolved {:?} into: {:?}", expr, resolved_rule);
                 resolved_rule_dict.insert(decl.name.to_owned(), resolved_rule);
             },
@@ -258,23 +296,32 @@ pub fn resolve_ast(
         }
     }
 
-    Ok(resolved_rule_dict)
+    resolved_rule_dict
 }
 
 impl<'src> Expr<'src> {
-    pub fn resolve_src(&self, src_dict: &HashMap<SrcName, DomainSrcId>) -> Result<(encoding_spec::SrcId, Match)> {
+    pub fn resolve_src(&self, src_dict: &HashMap<SrcName, DomainSrcId>) -> Result<(encoding_spec::SrcId, Match), Error> {
         Ok(
         match self {
             Self::X => (encoding_spec::SrcId::SrcId, Match::X),
             Self::SrcId(src_id) => {
                 debug!("Resolving source identifier: {:?}", src_id);
-                let src_bits_match = src_id.resolve(src_dict)?.bits_match().into();
+                let src_bits_match = src_id
+                        .resolve(src_dict)?
+                        .bits_match()
+                        .into();
                 (src_id.clone().into(), Match::Bits(src_bits_match))
             },
             // TODO: If error occur extract the span and propagate it back as Result
             // Perhaps make use of ariadne to properly show diagnostics relevant to code
             Self::Any(exprs) => {
-                let src_id_matches: Vec<_> = exprs.iter().map(|e| e.0.resolve_src(src_dict)).collect::<Result<_,_>>()?;
+                let src_id_matches: Vec<_> = exprs
+                        .iter()
+                        .map(|(expr, span)| expr
+                            .resolve_src(src_dict)
+                            .map_err(|err| err.with_span(*span))
+                        )
+                        .collect::<Result<_,_>>()?;
                 let src_id_type = src_id_matches.iter().fold(encoding_spec::SrcId::SrcId, |acc, (src_id, _)| {
                     acc.combine(&src_id).unwrap()
                 });
@@ -283,7 +330,7 @@ impl<'src> Expr<'src> {
                 // TODO: flatten nested Any
                 (src_id_type, src_id_match.optimise())
             }
-            _ => return Err(anyhow!("Unexpected expression type for resolving SrcId: {:?}", self)),
+            _ => return Err(Error::Unspanned(format!("Unexpected expression type for resolving SrcId: {:?}", self))),
         }
         )
     }
@@ -293,14 +340,14 @@ impl<'src> Expr<'src> {
         src_dict: &HashMap<SrcName, DomainSrcId>,
         trie: &Trie,
         resolved_src: &HashMap<&'src str, (encoding_spec::SrcId, Match)>
-    ) -> Result<Match> {
+    ) -> Result<Match, Error> {
         Ok(match self {
             Self::X => Match::X,
             Self::Pattern(fields) => {
                 let src_field = match &fields.last() {
                     Some(field) => &field.0,
                     // TODO: Include span information
-                    None => return Err(anyhow!("Pattern must have at least one field (the SrcId)")),
+                    None => return Err(Error::Unspanned("Pattern must have at least one field (the SrcId)".into())),
                 };
                 let (src_id_type, src_id_match) = match src_field {
                     Expr::SrcId(_) | Expr::Any(_) => {
@@ -310,10 +357,10 @@ impl<'src> Expr<'src> {
                         match resolved_src.get(*src_ident) {
                             Some(ident) => ident.clone(),
                             // TODO: Include span information
-                            None => return Err(anyhow!("Unknown source identifier in pattern: {}", src_ident)),
+                            None => return Err(Error::Unspanned(format!("Unknown source identifier in pattern: {}", src_ident))),
                         }
                     }
-                    _ => return Err(anyhow!("Unexpected expression type for SrcId in pattern: {:?}", src_field)),
+                    _ => return Err(Error::Unspanned(format!("Unexpected expression type for SrcId in pattern: {:?}", src_field))),
                 };
 
                 let mut fields: Vec<_> = fields[..fields.len() - 1]
@@ -321,20 +368,29 @@ impl<'src> Expr<'src> {
                     .map(|(field, span)| match field {
                         Expr::X => Ok(pattern::Field::X),
                         Expr::Field(field_id) => Ok(pattern::Field::Field(field_id)),
-                        _ => Err(anyhow!("Unexpected expression type in pattern fields: {:?} at {}", field, span)),
+                        _ => Err(Error::Spanned{msg:format!("Unexpected expression type in pattern fields: {:?}", field), span: *span}),
                     })
-                    .collect::<Result<_>>()?;
+                    .collect::<Result<_,_>>()?;
 
                 fields.push(pattern::Field::SrcId(src_id_type));
                 let pattern = Pattern(fields);
-                let (bits_match, _src_id_type) = trie.get(&pattern).context("Failed to get pattern from trie")?;
+                let (bits_match, _src_id_type) = trie
+                    .get(&pattern)
+                    .map_err(|err|
+                        Error::Unspanned(format!("{}", err.context("Failed to get pattern from trie")))
+                    )?;
                 Match::And(Box::new(Match::Bits(bits_match)), Box::new(src_id_match)).optimise()
             }
             Self::Any(exprs) => {
-                let bits_match = exprs.iter().map(|(e, span)| e.resolve_pattern(src_dict, trie, resolved_src)).collect::<Result<_>>()?;
+                let bits_match = exprs
+                    .iter()
+                    .map(|(e, span)| e
+                        .resolve_pattern(src_dict, trie, resolved_src)
+                        .map_err(|err| err.with_span(*span))
+                    ).collect::<Result<_,_>>()?;
                 Match::Any(bits_match).optimise()
             }
-            _ => return Err(anyhow!("Unexpected expression type for resolving SrcId: {:?}", self)),
+            _ => return Err(Error::Unspanned(format!("Unexpected expression type for resolving SrcId: {:?}", self))),
         })
     }
 
@@ -344,38 +400,45 @@ impl<'src> Expr<'src> {
         trie: &Trie,
         resolved_src: &HashMap<&'src str, (encoding_spec::SrcId, Match)>,
         resolved_pattern: &HashMap<&'src str, Match>
-    ) -> Result<SeqTree> {
+    ) -> Result<SeqTree, Error> {
         Ok(match self {
             Self::X => SeqTree::Pattern(Predicate::Unit, Match::X),
             Self::Seq(exprs) => SeqTree::Seq(
                 exprs
                     .iter()
-                    .map(|(e, span)| e.resolve_seq(src_dict, trie, resolved_src, resolved_pattern))
-                    .collect::<Result<_>>()?
+                    .map(|(e, span)| e
+                        .resolve_seq(src_dict, trie, resolved_src, resolved_pattern)
+                        .map_err(|err| err.with_span(*span))
+                    )
+                    .collect::<Result<_,_>>()?
             ),
-            Self::Perm(_exprs) => todo!("Permutation feature not implemented yet"),
-            //Self::Perm(exprs) => SeqTree::Perm(exprs.iter().map(|(e, span)| e.resolve_seq(src_dict, trie, resolved_src, resolved_pattern)).collect()?),
+            Self::Perm(_exprs) => return Err(Error::Unspanned(format!("Permutation feature not implemented yet"))),
             Self::Any(exprs) => SeqTree::Pattern(
                 Predicate::Unit,
-                Match::Any(
-                    exprs.iter()
-                         .map(|(e, span)| e.resolve_pattern(src_dict, trie, resolved_src))
-                         .collect::<Result<_>>()?
+                Match::Any( exprs
+                    .iter()
+                    .map(|(e, span)| e
+                        .resolve_pattern(src_dict, trie, resolved_src)
+                        .map_err(|err| err.with_span(*span))
+                    )
+                    .collect::<Result<_,_>>()?
                 ).optimise()
             ),
             Self::Repeat(repetition, boxed) => {
                 let (pattern, span) = boxed.as_ref();
-                let pred_pattern_match = pattern.resolve_seq(src_dict, trie, resolved_src, resolved_pattern)?;
+                let pred_pattern_match = pattern
+                    .resolve_seq(src_dict, trie, resolved_src, resolved_pattern)
+                    .map_err(|err| err.with_span(*span))?;
                 if let SeqTree::Pattern(Predicate::Unit, pattern_match) = pred_pattern_match {
                     SeqTree::Pattern(Predicate::Repeat(repetition.clone()), pattern_match)
                 } else {
-                    return Err(anyhow!("Expected a pattern in sequence repetition, found: {:?}", pattern));
+                    return Err(Error::Unspanned(format!("Expected a pattern in sequence repetition, found: {:?}", pattern)).with_span(*span));
                 }
             },
             Self::Ident(pattern_name) => {
                 match resolved_pattern.get(*pattern_name) {
                     Some(pattern_match) => SeqTree::Pattern(Predicate::Unit, pattern_match.clone()),
-                    None => return Err(anyhow!("Unknown pattern in sequence: {}", pattern_name)),
+                    None => return Err(Error::Unspanned(format!("Unknown pattern in sequence: {}", pattern_name))),
                 }
             }
             Self::Pattern(_expr) => {
@@ -384,14 +447,16 @@ impl<'src> Expr<'src> {
             }
             Self::Not(boxed) => {
                 let (pattern, span) = boxed.as_ref();
-                let pred_pattern_match = pattern.resolve_seq(src_dict, trie, resolved_src, resolved_pattern)?;
+                let pred_pattern_match = pattern
+                    .resolve_seq(src_dict, trie, resolved_src, resolved_pattern)
+                    .map_err(|err| err.with_span(*span))?;
                 if let SeqTree::Pattern(Predicate::Unit, pattern_match) = pred_pattern_match {
                     SeqTree::Pattern(Predicate::Not, pattern_match)
                 } else {
-                    return Err(anyhow!("Expected a pattern in negation, found: {:?}", pattern));
+                    return Err(Error::Unspanned(format!("Expected a pattern in negation, found: {:?}", pattern)).with_span(*span));
                 }
             }
-            _ => return Err(anyhow!("Unexpected expression type for resolving sequence: {:?}", self)),
+            _ => return Err(Error::Unspanned(format!("Unexpected expression type for resolving sequence: {:?}", self))),
         })
     }
 
@@ -402,7 +467,7 @@ impl<'src> Expr<'src> {
         resolved_src: &HashMap<&'src str, (encoding_spec::SrcId, Match)>,
         resolved_pattern: &HashMap<&'src str, Match>,
         resolved_seq: &HashMap<&'src str, SeqTree>,
-    ) -> Result<RuleCond> {
+    ) -> Result<RuleCond, Error> {
         Ok(match self {
             Self::Pattern(_) => {
                 RuleCond::Pattern(Predicate::Unit, self.resolve_pattern(src_dict, trie, resolved_src)?)
@@ -410,28 +475,35 @@ impl<'src> Expr<'src> {
             Self::Repeat(repetition, boxed) => {
                 let (pattern, span) = boxed.as_ref();
                 // TODO: Also support Ident
-                let pred_pattern_match = pattern.resolve_rule_cond(src_dict, trie, resolved_src, resolved_pattern, resolved_seq)?;
+                let pred_pattern_match = pattern
+                    .resolve_rule_cond(src_dict, trie, resolved_src, resolved_pattern, resolved_seq)
+                    .map_err(|err| err.with_span(*span))?;
                 if let RuleCond::Pattern(Predicate::Unit, pattern_match) = pred_pattern_match {
                     RuleCond::Pattern(Predicate::Repeat(repetition.clone()), pattern_match)
                 } else {
-                    return Err(anyhow!("Expected a pattern in repetition, found: {:?}", pattern));
+                    return Err(Error::Unspanned(format!("Expected a pattern in repetition, found: {:?}", pattern)).with_span(*span));
                 }
             }
             Self::Any(exprs) => RuleCond::Pattern(
                 Predicate::Unit,
                 Match::Any(exprs.iter().map(|(expr, span)|
                     {
-                        let inner_rule_cond = expr.resolve_rule_cond(src_dict, trie, resolved_src, resolved_pattern, resolved_seq)?;
+                        let inner_rule_cond = expr
+                            .resolve_rule_cond(src_dict, trie, resolved_src, resolved_pattern, resolved_seq)
+                            .map_err(|err| err.with_span(*span))?;
                         if let RuleCond::Pattern(Predicate::Unit, pattern_match) = inner_rule_cond {
                             Ok(pattern_match)
                         } else {
-                            Err(anyhow!("Unexpected expression type in condition Any: {:?}", expr))
+                            Err(Error::Unspanned(format!("Unexpected expression type in condition Any: {:?}", expr)).with_span(*span))
                         }
-                    }).collect::<Result<_>>()?
+                    }).collect::<Result<_,_>>()?
                 ).optimise()
             ),
             Self::Seq(_) => {
-                RuleCond::Seq(self.resolve_seq(src_dict, trie, resolved_src, resolved_pattern)?.lower())
+                RuleCond::Seq(self
+                    .resolve_seq(src_dict, trie, resolved_src, resolved_pattern)?
+                    .lower()
+                )
             }
             Self::Ident(ident) => {
                 let seq = resolved_seq.get(ident);
@@ -439,20 +511,22 @@ impl<'src> Expr<'src> {
                 match (seq, pattern) {
                     (Some(seq), None)     => RuleCond::Seq(seq.clone().lower()),
                     (None, Some(pattern)) => RuleCond::Pattern(Predicate::Unit, pattern.clone()),
-                    (Some(_), Some(_))    => return Err(anyhow!("Identifier in rule condition cannot refer to both a sequence and a pattern: {}", ident)),
-                    (None, None)          => return Err(anyhow!("Unknown identifier in rule condition: {}", ident)),
+                    (Some(_), Some(_))    => return Err(Error::Unspanned(format!("Identifier in rule condition cannot refer to both a sequence and a pattern: {}", ident))),
+                    (None, None)          => return Err(Error::Unspanned(format!("Unknown identifier in rule condition: {}", ident))),
                 }
             }
             Self::Not(boxed) => {
                 let (pattern, span) = boxed.as_ref();
-                let pred_pattern_match = pattern.resolve_rule_cond(src_dict, trie, resolved_src, resolved_pattern, resolved_seq)?;
+                let pred_pattern_match = pattern
+                    .resolve_rule_cond(src_dict, trie, resolved_src, resolved_pattern, resolved_seq)
+                    .map_err(|err| err.with_span(*span))?;
                 if let RuleCond::Pattern(Predicate::Unit, pattern_match) = pred_pattern_match {
                     RuleCond::Pattern(Predicate::Not, pattern_match.optimise())
                 } else {
-                    return Err(anyhow!("Expected a pattern in negation, found: {:?}", pattern));
+                    return Err(Error::Unspanned(format!("Expected a pattern in negation, found: {:?}", pattern)).with_span(*span));
                 }
             }
-            _ => return Err(anyhow!("Unexpected expression type for resolving rule: {:?}", self)),
+            _ => return Err(Error::Unspanned(format!("Unexpected expression type for resolving rule: {:?}", self))),
         })
     }
 
@@ -463,259 +537,23 @@ impl<'src> Expr<'src> {
         resolved_src: &HashMap<&'src str, (encoding_spec::SrcId, Match)>,
         resolved_pattern: &HashMap<&'src str, Match>,
         resolved_seq: &HashMap<&'src str, SeqTree>,
-    ) -> Result<Rule> {
+    ) -> Result<Rule, Error> {
         Ok(match self {
             Self::Rule(conditions) => {
                 if conditions.is_empty() {
-                    return Err(anyhow!("Rule must have at least one condition"));
+                    return Err(Error::Unspanned(format!("Rule must have at least one condition")));
                 }
-                let resolved_conditions = conditions.iter().map(|(condition, span)|
-                        condition.resolve_rule_cond(src_dict, trie, resolved_src, resolved_pattern, resolved_seq)
-                    ).collect::<Result<_>>()?;
+                let resolved_conditions = conditions
+                    .iter()
+                    .map(|(condition, span)|
+                        condition
+                            .resolve_rule_cond(src_dict, trie, resolved_src, resolved_pattern, resolved_seq)
+                            .map_err(|err| err.with_span(*span))
+                    )
+                    .collect::<Result<_,_>>()?;
                 Rule(resolved_conditions)
             }
-            _ => return Err(anyhow!("Unexpected expression type for resolving rule: {:?}", self)),
+            _ => return Err(Error::Unspanned(format!("Unexpected expression type for resolving rule: {:?}", self))),
         })
     }
-}
-
-impl Rule {
-    pub fn evaluate(&self, events_chain: &[u32]) -> bool {
-        self.0.iter().all(|cond| match cond {
-            RuleCond::Pattern(Predicate::Unit, pattern_match)      => pattern_match.check(events_chain),
-            RuleCond::Pattern(Predicate::Not, pattern_match)       => !pattern_match.check(events_chain),
-            RuleCond::Pattern(Predicate::Repeat(r), pattern_match) => r.check(events_chain.iter().fold(0, |acc, &event| if pattern_match.check(event) { acc + 1} else { acc })),
-            RuleCond::Seq(_) => todo!("Sequence evaluation not implemented yet"),
-        })
-    }
-}
-
-pub fn find_forward_uid_rule(ledger: &Ledger, rule: &Rule) -> Result<Vec<Uid>> {
-    let mut found_uids: Vec<Uid> = Vec::new();
-
-    #[derive(Clone, Debug)]
-    pub enum CondTraverse<'a> {
-        Pattern{
-            pred: Predicate,
-            event_match: &'a Match,
-            cnt: usize,
-        },
-        Seq{
-            seq_idx: usize,
-            seq: &'a Seq,
-            cnt: usize,
-        }
-    }
-    #[derive(Clone)]
-    pub struct RuleTraverse<'a> {
-        pub uid: Uid,
-        pub cond_idx: usize,
-        pub conds: Vec<CondTraverse<'a>>,
-    }
-
-    impl RuleTraverse<'_> {
-        pub fn satfisfied(&self) -> bool {
-            if self.cond_idx != 0 {
-                return false;
-            }
-            for cond in self.conds.iter() {
-                match cond {
-                    CondTraverse::Pattern{pred, event_match:_, cnt} => {
-                        match pred {
-                            Predicate::Unit => return false,
-                            Predicate::Not => (),
-                            Predicate::Repeat(r) => {
-                                if !r.check(*cnt) {
-                                    return false;
-                                }
-                            }
-                        }
-                    }
-                    CondTraverse::Seq{seq_idx, seq, cnt:_} => {
-                        if *seq_idx < seq.0.len() {
-                            return false;
-                        }
-                    }
-                }
-            }
-            true
-        }
-    }
-
-    let mut stack: Vec<RuleTraverse> = Vec::new();
-
-    // Initial stack entries
-    let mut conds = Vec::new();
-    for cond in rule.0.iter().rev() {
-        match cond {
-            RuleCond::Pattern(pred, event_match) => conds.push(CondTraverse::Pattern{pred: pred.clone(), event_match, cnt: 0}),
-            RuleCond::Seq(seq) => {
-                conds.push(CondTraverse::Seq{seq_idx: 0, seq, cnt: 0});
-            }
-        }
-    }
-    for &uid in ledger.get_start_events() {
-        stack.push(RuleTraverse{ uid, cond_idx: 0, conds: conds.clone()});
-    }
-
-    // Ledger traversal loop
-    while !stack.is_empty() {
-        let mut rule = stack.pop().unwrap();
-
-        //println!("Evaluating rule at UID: {:?}, condition index: {}, conditions: {:?}", rule.uid, rule.cond_idx, rule.conds);
-
-        let mut pass = true;
-        let mut remove = false;
-        let mut bifurcate = false;
-
-        let mut recheck = true;
-        while recheck {
-            let cond = &mut rule.conds[rule.cond_idx];
-            recheck = false;
-            match cond {
-                CondTraverse::Pattern{pred, event_match, cnt} => {
-                    let event_check = event_match.check(rule.uid.event);
-                    match pred {
-                        Predicate::Unit => {
-                            if event_check {
-                                // Condition satified and ready to remove
-                                remove = true;
-                            }
-                        }
-                        Predicate::Not => {
-                            if event_check {
-                                pass = false;
-                            }
-                        }
-                        Predicate::Repeat(r) => {
-                            if event_check {
-                                *cnt = *cnt + 1;
-                                if r.min() > *cnt {
-                                    // Just increment count and stay on the same sequence condition until reaching the minimum required repetitions
-                                } else {
-                                    if let Some(upper) = r.max() {
-                                        if *cnt > upper {
-                                            pass = false;
-                                        }
-                                    } else {
-                                        remove = true;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                CondTraverse::Seq{seq_idx, seq, cnt} => {
-                    if *seq_idx >= seq.0.len() {
-                        pass = false;
-                        break;
-                    }
-
-                    let (pred, pattern_match) = &seq.0[*seq_idx];
-                    let event_check = pattern_match.check(rule.uid.event);
-                    match pred {
-                        // Indexes of sequence conditions that are currently in neg check (predicate=!),
-                        // to be evaluated on the same UID without advancing
-                        Predicate::Not => {
-                            if event_check {
-                                pass = false;
-                            } else {
-                                recheck = true;
-                                *cond = CondTraverse::Seq{seq_idx: *seq_idx + 1, cnt: 0, seq};
-                            }
-                        }
-                        Predicate::Unit => {
-                            if event_check {
-                                *cond = CondTraverse::Seq{seq_idx: *seq_idx + 1, cnt: 0, seq};
-                            } else {
-                                pass = false;
-                            }
-                        }
-                        Predicate::Repeat(r) => {
-                            if event_check {
-                                *cnt = *cnt + 1;
-                                if r.min() > *cnt {
-                                    // Just increment count and stay on the same sequence condition until reaching the minimum required repetitions
-                                } else {
-                                    if let Some(upper) = r.max() {
-                                        assert!(r.min() <= upper, "Invalid repetition predicate with min > max in sequence condition");
-                                        if *cnt >= upper {
-                                            // Satisfied, move on
-                                            *cond = CondTraverse::Seq{seq_idx: *seq_idx + 1, cnt: 0, seq};
-                                        } else {
-                                             // Satisfied, but we might allow this pattern to
-                                            // consume more events
-                                            bifurcate = true;
-                                        }
-                                    } else {
-                                        bifurcate = true;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        assert!(!remove || !bifurcate, "Bifurcate(Seq) and Remove(Pattern) are mutually exclusive flags");
-
-        if pass {
-            let cond_idx = rule.cond_idx;
-            let next_uids = ledger.get_next(&rule.uid);
-
-            if remove {
-                rule.conds.remove(rule.cond_idx);
-                if rule.conds.len() == cond_idx {
-                    rule.cond_idx = 0;
-                }
-            } else {
-                if rule.cond_idx + 1 == rule.conds.len() {
-                    rule.cond_idx = 0;
-                } else {
-                    rule.cond_idx = rule.cond_idx + 1;
-                }
-            }
-
-
-            if bifurcate {
-                let mut bifurcated_rule = rule.clone();
-                if let CondTraverse::Seq{seq_idx, seq, cnt:_} = bifurcated_rule.conds[cond_idx] {
-                    bifurcated_rule.conds[cond_idx] = CondTraverse::Seq{seq_idx: seq_idx + 1, cnt: 0, seq};
-                } else {
-                    return Err(anyhow::anyhow!("Expected a sequence condition for bifurcation"));
-                }
-
-                if rule.cond_idx == 0 {
-                    for &next_uid in next_uids.iter() {
-                        stack.push(RuleTraverse{ uid: next_uid, cond_idx: bifurcated_rule.cond_idx, conds: bifurcated_rule.conds.clone()});
-                    }
-                    if next_uids.is_empty() && rule.satfisfied() {
-                        //println!("Found a match for rule with UID: {:?}", rule.uid);
-                        if !found_uids.contains(&rule.uid) {
-                            found_uids.push(rule.uid);
-                        }
-                    }
-                } else {
-                    stack.push(bifurcated_rule);
-                }
-            }
-
-            if rule.cond_idx == 0 {
-                for &next_uid in next_uids.iter() {
-                    stack.push(RuleTraverse{ uid: next_uid, cond_idx: rule.cond_idx, conds: rule.conds.clone()});
-                }
-                if next_uids.is_empty() && rule.satfisfied() {
-                    //println!("Found a match for rule with UID: {:?}", rule.uid);
-                    if !found_uids.contains(&rule.uid) {
-                        found_uids.push(rule.uid);
-                    }
-                }
-            } else {
-                stack.push(rule);
-            }
-        }
-    }
-
-    Ok(found_uids)
 }

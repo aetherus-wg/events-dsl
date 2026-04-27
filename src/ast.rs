@@ -1,9 +1,10 @@
 use std::collections::HashMap;
-use anyhow::{anyhow, Result};
 
 use chumsky::prelude::*;
 
-use aetherus_events::{SrcId as DomainSrcId, filter::BitsMatch, ledger::SrcName};
+use aetherus_events::{SrcId as DomainSrcId, ledger::SrcName};
+
+use crate::error::Error;
 
 pub type Span = SimpleSpan;
 pub type Spanned<T> = (T, Span);
@@ -33,33 +34,33 @@ macro_rules! get_src_id {
     ($subt:ident, $name:expr, $dict:expr) => {
         match $dict.get(&SrcName::$subt($name)) {
             Some(src_id) => Ok(src_id.clone()),
-            None => Err(anyhow!("Unknown source name: {}(\"{}\")", stringify!($subt), $name)),
+            None => Err(Error::Unspanned(format!("Unknown source name: {}(\"{}\")", stringify!($subt), $name))),
         }
     };
 }
 
 impl<'a> SrcId<'a> {
-    pub fn parse_id(src_id_type: &str, id: u16) -> Result<Self> {
+    pub fn parse_id(src_id_type: &str, id: u16) -> Result<Self, Error> {
         match src_id_type {
             "Mat"              => Ok(Self::Mat(id)),
             "Surf"             => Ok(Self::Surf(id)),
             "MatSurf"          => Ok(Self::MatSurf(id)),
             "Light"            => Ok(Self::Light(id)),
             "Detector" | "Det" => Ok(Self::Detector(id)),
-            _ => Err(anyhow!("Unknown source id type: {}", src_id_type)),
+            _ => Err(Error::Unspanned(format!("Unknown source id type: {}", src_id_type))),
         }
     }
-    pub fn parse_name(src_id_type: &str, name: &'a str) -> Result<Self> {
+    pub fn parse_name(src_id_type: &str, name: &'a str) -> Result<Self, Error> {
         match src_id_type {
             "Mat"              => Ok(Self::MatName(name)),
             "Surf"             => Ok(Self::SurfName(name)),
             "MatSurf"          => Ok(Self::MatSurfName(name)),
             "Light"            => Ok(Self::LightName(name)),
             "Detector" | "Det" => Ok(Self::DetectorName(name)),
-            _ => Err(anyhow!("Unknown source id type: {}", src_id_type)),
+            _ => Err(Error::Unspanned(format!("Unknown source id type: {}", src_id_type))),
         }
     }
-    pub fn resolve(&self, dict: &HashMap<SrcName, DomainSrcId>) -> Result<DomainSrcId> {
+    pub fn resolve(&self, dict: &HashMap<SrcName, DomainSrcId>) -> Result<DomainSrcId, Error> {
         Ok(match self {
             Self::None            => DomainSrcId::None,
             Self::Mat(n)          => DomainSrcId::Mat(*n),
