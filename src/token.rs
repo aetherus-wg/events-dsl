@@ -1,3 +1,8 @@
+//! Token - Lexer tokens for the filter DSL
+//!
+//! This module defines the tokens produced by the lexer
+//! before parsing into the AST.
+
 use std::{collections::HashSet, fmt};
 
 use chumsky::prelude::*;
@@ -5,6 +10,10 @@ use chumsky::prelude::*;
 pub type Span = SimpleSpan;
 pub type Spanned<T> = (T, Span);
 
+/// Tokens produced by the lexer.
+///
+/// These tokens represent the atomic units of the filter DSL
+/// before parsing into the AST.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token<'src> {
     // - "[...]" used for "any[...]", "seq[...]" and "perm[...]"
@@ -12,33 +21,36 @@ pub enum Token<'src> {
     // - "{ conditions* }" lists conditions to be all met
     // - "," Separator for list, patterns and inside repetition
     // - "=" Assignment operator for field, pattern and seq declarations
+    /// Control characters: '=', '[', ']', ',', '{', '}'
     Ctrl(char), // '=', '[', ']', ',' , '{', '}'
-    Predicates(char), // '*', '+', '?', ! = 0+, 1+, {0,1}, 0
+    /// Repetition operators: '*', '+', '?', '!'
+    Predicates(char), // '*', '+', '?', ! = {0,}, {1,}, {0,1}, 0
     Concat,     // '|' Concatenation operator
-    // 'X'=DontCare -Matches any event field or pattern
+    /// 'X'=DontCare - Matches any event field or pattern
     X,
-    // "any[" ... "]" matches any field/pattern with the specified values
+    /// "any[" ... "]" matches any field/pattern with the specified values
     Any,
-    // "perm[" ... "]" matches patterns in any permutation/order
+    /// "perm[" ... "]" matches patterns in any permutation/order
     Perm,
-    // - "seq[ ... ]" inline sequence
+    /// - "seq[ ... ]" inline sequence
     Seq,
-    // "src <src_ident> = <expr>"
+    /// "src <src_ident> = <expr>"
     SrcDecl,
-    // "pattern <pattern_ident> = <expr>"
+    /// "pattern <pattern_ident> = <expr>"
     PatternDecl,
-    // - "sequence <seq_ident> = seq?[]" enumerates patterns in sequence order
+    /// - "sequence <seq_ident> = seq?[]" enumerates patterns in sequence order
     SeqDecl,
-    // "rule <rule_ident> = { <expr> }"
+    /// "rule <rule_ident> = { <expr> }"
     RuleDecl,
-    // Identifiers for src ids, fields, patterns and sequences
+    /// Identifiers for src ids, patterns and sequences
     Ident(&'src str),
+    /// Field Identifier defined by the encoding specification
     // MCRT, Emission, Detection,
     // Material, Interface, Elastic, etc. => Must define a dictionary of Field names that are
     // reserved
     FieldId(&'src str),
+    /// <SrcIdName>(<value>) where value can be hex/dec
     // "match for "MatId", "MatSurfId", "SurfId", "LightId", "DetectorId": <SrcIdName>("<name>") or
-    // <SrcIdName>(<value>) where value can be hex/dec
     SrcId(&'src str),
     Str(&'src str),
     Num(u16),

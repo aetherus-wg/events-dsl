@@ -1,3 +1,8 @@
+//! Parse - Parser for the filter DSL
+//!
+//! This module provides the parser that converts tokens
+//! into the abstract syntax tree (AST).
+
 use chumsky::{input::ValueInput, prelude::*};
 
 use crate::{
@@ -8,6 +13,20 @@ use crate::{
 pub type Span = SimpleSpan;
 pub type Spanned<T> = (T, Span);
 
+/// Creates an expression parser for the filter DSL.
+///
+/// This is the main parser that converts tokenized input
+/// into AST declarations.
+///
+/// # Type Parameters
+///
+/// * `'tokens` - Lifetime of tokens
+/// * `'src` - Lifetime of source code
+/// * `I` - Input type (must implement ValueInput)
+///
+/// # Returns
+///
+/// A chumsky parser that produces [`Vec<Declaration>`]
 pub fn expr_parser<'tokens, 'src: 'tokens, I>()
 -> impl Parser<'tokens, I, Vec<Declaration<'src>>, extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone
 where

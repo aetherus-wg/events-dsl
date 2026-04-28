@@ -1,3 +1,8 @@
+//! Evaluate - Rule evaluation
+//!
+//! This module provides functionality for evaluating rules
+//! against Ledger hierarchy of events that encodes the chain of events
+
 use aetherus_events::{Ledger, ledger::Uid};
 use anyhow::Result;
 
@@ -5,11 +10,27 @@ use crate::Check;
 use crate::model::{Match, Predicate, Rule, RuleCond, Seq};
 
 impl Rule {
+    /// Evaluate this rule against a ledger.
+    ///
+    /// Returns a list of UIDs that match the rule.
     pub fn evaluate(&self, ledger: &Ledger) -> Result<Vec<Uid>> {
         find_uids_with_rule(ledger, self)
     }
 }
 
+/// Find UIDs that match a rule.
+///
+/// Iterates through the ledger and finds all events
+/// that satisfy the given rule.
+///
+/// # Arguments
+///
+/// * `ledger` - The event ledger to search
+/// * `rule` - The rule to evaluate
+///
+/// # Returns
+///
+/// A list of matching UIDs
 pub fn find_uids_with_rule(ledger: &Ledger, rule: &Rule) -> Result<Vec<Uid>> {
     let mut found_uids: Vec<Uid> = Vec::new();
 

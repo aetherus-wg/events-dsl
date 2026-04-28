@@ -1,3 +1,9 @@
+//! AST - Abstract Syntax Tree types for the filter DSL
+//!
+//! This module defines the types that represent parsed filter scripts.
+//! These types form the intermediate representation before conversion
+//! to the semantic model.
+
 use std::collections::HashMap;
 
 use chumsky::prelude::*;
@@ -9,9 +15,23 @@ use crate::error::Error;
 pub type Span = SimpleSpan;
 pub type Spanned<T> = (T, Span);
 
-/// Events SrcId encoded in 15:0 bits of the encoding
-/// The ledger holds the mapping of the SrcId names and their encoded value,
-/// hence the need to map to the resolved ledger::SrcId
+/// Represents an event source identifier.
+///
+/// Source IDs identify where events originate from in the simulation.
+/// They can be either resolved (numeric encoding) or unresolved (named).
+///
+/// Variants:
+/// - `None`                    - No source specified
+/// - `Mat(u16)`                - Material source with numeric ID
+/// - `Surf(u16)`               - Surface source with numeric ID
+/// - `MatSurf(u16)`            - Material-Surface source with numeric ID
+/// - `Light(u16)`              - Light source with numeric ID
+/// - `Detector(u16)`           - Detector source with numeric ID
+/// - `MatName(&'src str)`      - Material source by name (to be resolved)
+/// - `SurfName(&'src str)`     - Surface source by name
+/// - `MatSurfName(&'src str)`  - Material-Surface source by name
+/// - `LightName(&'src str)`    - Light source by name
+/// - `DetectorName(&'src str)` - Detector source by name
 #[derive(Debug, Clone)]
 pub enum SrcId<'src> {
     None,
@@ -80,6 +100,21 @@ impl<'a> SrcId<'a> {
     }
 }
 
+/// Specifies repetition count for pattern matching.
+///
+/// Defines how many times a pattern must occur for a match.
+/// Corresponds to quantifier syntax in the filter DSL.
+///
+/// | Variant         | DSL Syntax  | Meaning         |
+/// |-----------------|-------------|-----------------|
+/// | `Unit`          | (none)      | Exactly once    |
+/// | `Optional`      | `?`         | 0 or 1 times    |
+/// | `OneOrMore`     | `+`         | 1 or more times |
+/// | `ZeroOrMore`    | `*`         | 0 or more times |
+/// | `NTimes(n)`     | `{n}`       | Exactly n times |
+/// | `AtLeast(n)`    | `{n,}`      | n or more times |
+/// | `AtMost(n)`     | `{,n}`      | 0 to n times    |
+/// | `Interval(n,m)` | `{n,m}`     | n to m times    |
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Repetition {
     Unit,                   // '' Pass-through, no repetition = {1,1}
@@ -125,6 +160,25 @@ impl Repetition {
 }
 
 #[derive(Debug, Clone)]
+/// Represents an expression in the filter DSL.
+///
+/// Expressions are the core building blocks of patterns and rules.
+/// They define what events to match and how to combine matching criteria.
+///
+/// Variants:
+/// - `X`                                      - Don't care / wildcard (matches anything)
+/// - `Ident(&'src str)`                       - User-defined identifier
+/// - `Field(&'src str)`                       - Event field (e.g., Material, Elastic)
+/// - `LedgerPath(&'src str)`                  - Path to ledger file
+/// - `SignalsPath(&'src str)`                 - Path to signals file
+/// - `Any(Vec<Spanned<Self>>)`                - Match any of several patterns
+/// - `Not(Box<Spanned<Self>>)`                - Negation
+/// - `Repeat(Repetition, Box<Spanned<Self>>)` - Repetition modifier
+/// - `Seq(Vec<Spanned<Self>>)`                - Sequence (ordered)
+/// - `Perm(Vec<Spanned<Self>>)`               - Permutation (any order)
+/// - `Rule(Vec<Spanned<Self>>)`               - Rule condition
+/// - `Pattern(Vec<Spanned<Self>>)`            - Pattern (alternation via `|`)
+/// - `SrcId(SrcId<'src>)`                     - Source ID reference
 pub enum Expr<'src> {
     X,
     Ident(&'src str),
@@ -143,6 +197,9 @@ pub enum Expr<'src> {
 }
 
 #[derive(Debug)]
+/// The type of a declaration.
+///
+/// Indicates what kind of declaration a [`Declaration`] contains.
 pub enum DeclType {
     SrcId,
     Pattern,
@@ -153,9 +210,17 @@ pub enum DeclType {
 }
 
 #[derive(Debug)]
+/// A declaration in the filter DSL.
+///
+/// Declarations are the top-level statements in a filter script,
+/// defining sources, patterns, sequences, and rules.
 pub struct Declaration<'src> {
+    /// The name of the declaration
     pub name: &'src str,
+    /// The type of declaration
     pub decl_type: DeclType,
+    /// Source span for error reporting
     pub span: Span,
+    /// The declaration body (expression)
     pub body: Spanned<Expr<'src>>,
 }

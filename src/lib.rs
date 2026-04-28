@@ -1,3 +1,42 @@
+//! `eldritch-dsl` - A domain-specific language for filtering event data
+//!
+//! This crate provides a DSL for defining filters, patterns, and rules
+//! for processing event data, particularly for MCRT and LIDAR simulations.
+//!
+//! ## Key Concepts
+//!
+//! - **Sources**: Define event sources with identifiers (e.g. `Mat("water")`,
+//! `Mat(0)`, `MatSurf(0xFFFE)`)
+//! - **Patterns**: Define matching criteria for event types formed of field concatenations
+//! (e.g., `MCRT | Material | Elastic | X | etc.`)
+//! - **Sequences**: Define ordered lists of events to match
+//! - **Rules**: Define conditions that must be satisfied for matching
+//!
+//! ## Example
+//!
+//! ```rust
+//! use eldritch_dsl::{parse_script, ast::DeclType};
+//!
+//! let script = r#"
+//!     src water = Mat("seawater")
+//!     pattern water_interaction = Material | Elastic | X | water
+//! "#;
+//! let decls = parse_script(script);
+//!
+//! for decl in &decls {
+//!     println!("{}: {:?}", decl.name, decl.decl_type);
+//! }
+//! ```
+//!
+//! ## Modules
+//!
+//! - [`ast`] - Abstract syntax tree types
+//! - [`error`] - Error types
+//! - [`evaluate`] - Rule evaluation
+//! - [`model`] - Semantic model
+//! - [`parse`] - Parser implementation
+//! - [`token`] - Tokenizer
+
 pub mod ast;
 pub mod error;
 pub mod evaluate;
@@ -22,10 +61,42 @@ pub type Spanned<T> = (T, Span);
 // -----------------------------------------------
 // Model traits and helpers
 // -----------------------------------------------
+/// A trait for checking if a value matches a pattern.
+///
+/// This trait is implemented by types that can verify whether
+/// a given value satisfies matching criteria.
+///
+/// # Example
+///
+/// ```rust
+/// use eldritch_dsl::model::{Match, BitsMatch};
+/// use eldritch_dsl::Check;
+///
+/// let bm = BitsMatch { mask: 0xFF, value: 0x42 };
+/// let m = Match::Bits(bm);
+///
+/// assert!(m.check(0x42));
+/// assert!(!m.check(0x00));
+/// ```
 pub trait Check<T> {
+    /// Check if the given value matches this pattern.
     fn check(&self, value: T) -> bool;
 }
 
+/// Extract the ledger path from parsed declarations.
+///
+/// Searches through declarations for a `ledger = "path"` statement
+/// and returns the resolved path relative to the script file location.
+///
+/// # Arguments
+///
+/// * `declarations` - The parsed declarations from a filter script
+/// * `script_src` - The original source code (for error reporting)
+/// * `script_filepath` - Path to the script file (for resolving relative paths)
+///
+/// # Returns
+///
+/// The resolved absolute path to the ledger file, or `None` if not found
 pub fn extract_ledger_path(
     declarations: &Vec<Declaration>,
     script_src: &str,
@@ -59,6 +130,20 @@ pub fn extract_ledger_path(
     }
 }
 
+/// Extract the signals path from parsed declarations.
+///
+/// Searches through declarations for a `signals = "path"` statement
+/// and returns the resolved path relative to the script file location.
+///
+/// # Arguments
+///
+/// * `declarations` - The parsed declarations from a filter script
+/// * `script_src` - The original source code (for error reporting)
+/// * `script_filepath` - Path to the script file (for resolving relative paths)
+///
+/// # Returns
+///
+/// The resolved absolute path to the signals file, or `None` if not found
 pub fn extract_signals_path(
     declarations: &Vec<Declaration>,
     script_src: &str,
@@ -95,6 +180,38 @@ pub fn extract_signals_path(
 // -----------------------------------------------
 // Parsing entry point
 // -----------------------------------------------
+
+/// Parse a filter DSL script into declarations.
+///
+/// This is the main entry point for parsing filter scripts.
+/// It tokenizes the source code and parses it into a sequence of declarations.
+///
+/// # Arguments
+///
+/// * `script_src` - The filter DSL script source code
+/// * `field_dict` - A set of valid field names for the domain
+///
+/// # Returns
+///
+/// A vector of declarations parsed from the script
+///
+/// # Example
+///
+/// ```rust
+/// use eldritch_dsl::parse_script;
+///
+/// let script = r#"
+///     src water = Mat("seawater")
+///     pattern interaction = Material | Elastic
+///     rule forward = Material => Elastic
+/// "#;
+/// let field_dict = ["MCRT", "Material", "Elastic"].iter().collect();
+///
+/// let decls = parse_script(script, &field_dict);
+/// for decl in &decls {
+///     println!("{}: {:?}", decl.name, decl.decl_type);
+/// }
+/// ```
 pub fn parse_script<'src>(
     script_src: &'src str,
     field_dict: &HashSet<String>,
@@ -128,6 +245,17 @@ pub fn parse_script<'src>(
 // Parsing helpers
 // -----------------------------------------------
 
+/// Report a custom failure with optional extra labels.
+///
+/// This function prints an error message with source location information
+/// and exits the program with exit code 1.
+///
+/// # Arguments
+///
+/// * `msg` - The main error message
+/// * `label` - Primary error location (message, span)
+/// * `extra_labels` - Additional context labels
+/// * `src` - Source code for display
 pub fn failure(
     msg: String,
     label: (String, SimpleSpan),
@@ -154,6 +282,10 @@ pub fn failure(
     std::process::exit(1)
 }
 
+/// Parse a chumsky parse error and report it.
+///
+/// Converts a chumsky [`Rich`] error to a user-friendly error message
+/// and exits the program.
 pub fn parse_failure(err: &Rich<impl std::fmt::Display>, src: &str) -> ! {
     failure(
         err.reason().to_string(),

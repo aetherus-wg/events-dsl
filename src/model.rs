@@ -1,3 +1,11 @@
+//! Model - Semantic model for filter DSL
+//!
+//! This module provides the semantic model that represents
+//! the meaning of parsed filter DSL declarations.
+//!
+//! The model converts AST expressions to concrete matching structures
+//! that can efficiently evaluate events.
+
 use std::collections::HashMap;
 
 use aetherus_events::{SrcId as DomainSrcId, ledger::SrcName};
@@ -19,6 +27,17 @@ use crate::{
 // AST -> Semantics Model
 // -------------------------------------------------
 
+/// Represents a matching pattern for event evaluation.
+///
+/// This is the runtime representation of a pattern that can be
+/// checked against event data to determine if there's a match.
+///
+/// Variants:
+/// - `X` - Wildcard (matches anything)
+/// - `Bits(BitsMatch)` - Bitwise pattern matching
+/// - `Not(Box<Match>)` - Negation of a pattern
+/// - `And(Box<Match>, Box<Match>)` - Conjunction (both must match)
+/// - `Any(Vec<Match>)` - Disjunction (any must match)
 #[derive(Debug, Clone, PartialEq)]
 pub enum Match {
     X,
@@ -132,16 +151,9 @@ impl SrcId<'_> {
     }
 }
 
-#[derive(Debug)]
-pub enum Value<'src, T> {
-    X,
-    Ident(&'src str),
-    Primitive(T),
-    // NOTE: There is no reason to support nested "any" since it trivially flattens
-    Any(Vec<Self>),
-    Not(Box<Self>),
-}
-
+/// A predicate modifier for pattern matching.
+///
+/// Applies additional constraints to patterns.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Predicate {
     Unit,
@@ -149,13 +161,17 @@ pub enum Predicate {
     Repeat(Repetition),
 }
 
-// Sequence Tree
+/// Sequence Tree
+/// Represents a sequence of patterns to match in order.
+///
+///  - Used for rules that require specific ordering of events.
 #[derive(Debug, Clone)]
 pub enum SeqTree {
+    /// A pattern with optional predicate
     Pattern(Predicate, Match),
-    // TODO: Enable permutations with splatting (Julia nomenclature)
+    /// Permutation - any order
     Perm(Vec<Self>),
-    // TODO: Flatten nested sequences
+    /// Sequence - ordered list
     Seq(Vec<Self>),
 }
 
@@ -196,21 +212,48 @@ impl SeqTree {
     }
 }
 
+/// A sequence of predicate-match pairs.
+///
+/// This represents a flattened sequence for efficient matching.
 #[derive(Debug)]
 pub struct Seq(pub Vec<(Predicate, Match)>);
 
+/// A condition in a rule.
+///
+/// Rules can have pattern conditions or sequence conditions.
 #[derive(Debug)]
 pub enum RuleCond {
+    /// Match a specific pattern
     Pattern(Predicate, Match),
+    /// Match a sequence
     Seq(Seq),
 }
 
+/// A rule definition.
+///
+/// A rule contains a list of conditions that must be satisfied.
 #[derive(Debug)]
 pub struct Rule(pub Vec<RuleCond>);
 
 // -------------------------------------------------
 // Processing AST into Semantics Model
 // -------------------------------------------------
+
+/// Resolve AST declarations into a semantic model.
+///
+/// Converts parsed AST declarations into a map of rule names
+/// to their resolved semantic representations.
+///
+/// # Arguments
+///
+/// * `src` - Source code for error reporting
+/// * `declarations` - Parsed AST declarations
+/// * `src_dict` - Mapping of source names to IDs
+/// * `trie` - Pattern trie for field lookup
+///
+/// # Returns
+///
+/// A map from rule names to their resolved [`Rule`] representations
 pub fn resolve_ast(
     src: &str,
     declarations: &Vec<Declaration>,
