@@ -1,0 +1,10 @@
+[package]
+name = "et-python"
+version.workspace = true
+license.workspace = true
+edition.workspace = true
+readme.workspace = true
+repository.workspace = true
+description = "Eldritch-Trace Python bindings for .et DSL"
+
+[dependencies]

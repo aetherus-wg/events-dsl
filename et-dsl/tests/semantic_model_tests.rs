@@ -1,7 +1,7 @@
 use aetherus_events::{SrcId as DomainSrcId, ledger::SrcName};
-use eldritch_dsl::Check;
-use eldritch_dsl::ast::{Repetition, SrcId};
-use eldritch_dsl::model::{Match, Predicate, Rule, RuleCond, Seq, SeqTree};
+use et_dsl::Check;
+use et_dsl::ast::{Repetition, SrcId};
+use et_dsl::model::{Match, Predicate, Rule, RuleCond, Seq, SeqTree};
 use std::collections::HashMap;
 
 fn make_test_src_dict() -> HashMap<SrcName, DomainSrcId> {
@@ -27,7 +27,7 @@ fn make_test_src_dict() -> HashMap<SrcName, DomainSrcId> {
 
 mod match_evaluation {
     use super::*;
-    use encoding_spec::bits::BitsMatch;
+    use et_encoding::bits::BitsMatch;
 
     #[test]
     fn test_match_x_always_passes() {
@@ -159,7 +159,7 @@ mod match_evaluation {
 
 mod seqtree_tests {
     use super::*;
-    use encoding_spec::bits::BitsMatch;
+    use et_encoding::bits::BitsMatch;
 
     #[test]
     fn test_seqtree_optimise_flatten_nested_seq() {
@@ -229,43 +229,43 @@ mod encoding_src_id_conversion {
     fn test_src_id_to_encoding_id() {
         assert!(matches!(
             SrcId::Mat(5).to_encoding_src_id(),
-            encoding_spec::SrcId::MatId
+            et_encoding::SrcId::MatId
         ));
         assert!(matches!(
             SrcId::MatName("test").to_encoding_src_id(),
-            encoding_spec::SrcId::MatId
+            et_encoding::SrcId::MatId
         ));
         assert!(matches!(
             SrcId::Surf(3).to_encoding_src_id(),
-            encoding_spec::SrcId::SurfId
+            et_encoding::SrcId::SurfId
         ));
         assert!(matches!(
             SrcId::SurfName("test").to_encoding_src_id(),
-            encoding_spec::SrcId::SurfId
+            et_encoding::SrcId::SurfId
         ));
         assert!(matches!(
             SrcId::MatSurf(1).to_encoding_src_id(),
-            encoding_spec::SrcId::MatSurfId
+            et_encoding::SrcId::MatSurfId
         ));
         assert!(matches!(
             SrcId::MatSurfName("test").to_encoding_src_id(),
-            encoding_spec::SrcId::MatSurfId
+            et_encoding::SrcId::MatSurfId
         ));
         assert!(matches!(
             SrcId::Light(0).to_encoding_src_id(),
-            encoding_spec::SrcId::LightId
+            et_encoding::SrcId::LightId
         ));
         assert!(matches!(
             SrcId::LightName("laser").to_encoding_src_id(),
-            encoding_spec::SrcId::LightId
+            et_encoding::SrcId::LightId
         ));
         assert!(matches!(
             SrcId::Detector(0).to_encoding_src_id(),
-            encoding_spec::SrcId::DetectorId
+            et_encoding::SrcId::DetectorId
         ));
         assert!(matches!(
             SrcId::DetectorName("sensor").to_encoding_src_id(),
-            encoding_spec::SrcId::DetectorId
+            et_encoding::SrcId::DetectorId
         ));
     }
 }

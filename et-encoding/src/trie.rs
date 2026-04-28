@@ -132,11 +132,11 @@ impl Trie {
     /// # Examples
     ///
     /// ```ignored
-    /// use encoding_spec::trie::{Trie, Encoding};
-    /// use encoding_spec::trie::Field;
-    /// use encoding_spec::bits::BitsMatch;
-    /// use encoding_spec::SrcId;
-    /// use encoding_spec::encoding;
+    /// use et_encoding::trie::{Trie, Encoding};
+    /// use et_encoding::trie::Field;
+    /// use et_encoding::bits::BitsMatch;
+    /// use et_encoding::SrcId;
+    /// use et_encoding::encoding;
     ///
     /// let mut trie = Trie::new();
     /// let encoding = encoding!(MCRT, 0b0011, Material, 0b01, Elastic, 0b10, X, 0b0000, MatSurfId);
@@ -187,12 +187,12 @@ impl Trie {
     /// # Examples
     ///
     /// ```ignored
-    /// use encoding_spec::trie::{Trie, Encoding};
-    /// use encoding_spec::trie::Field;
-    /// use encoding_spec::pattern::{Pattern, self};
-    /// use encoding_spec::bits::BitsMatch;
-    /// use encoding_spec::SrcId;
-    /// use encoding_spec::encoding;
+    /// use et_encoding::trie::{Trie, Encoding};
+    /// use et_encoding::trie::Field;
+    /// use et_encoding::pattern::{Pattern, self};
+    /// use et_encoding::bits::BitsMatch;
+    /// use et_encoding::SrcId;
+    /// use et_encoding::encoding;
     ///
     /// let mut trie = Trie::new();
     /// let encoding = encoding!(MCRT, 0b0011, Material, 0b01, Elastic, 0b10, X, 0b0000, MatSurfId);

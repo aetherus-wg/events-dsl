@@ -4,7 +4,7 @@ use aetherus_events::{
 };
 use anyhow::{Context, Result};
 use clap::Parser;
-use eldritch_dsl::{extract_ledger_path, extract_signals_path, model::resolve_ast, parse_script};
+use et_dsl::{extract_ledger_path, extract_signals_path, model::resolve_ast, parse_script};
 use env_logger::Env;
 use std::{
     collections::HashMap,
@@ -57,7 +57,7 @@ fn main() -> Result<()> {
     let script_src = &fs::read_to_string(&script_filepath).context("Failed to read script file")?;
 
     // 1. Build the decoder Trie from the encoding scheme
-    let trie = encoding_spec::build_decoder(encoding_src)
+    let trie = et_encoding::build_decoder(encoding_src)
         .context("Failed to build decoder from encoding scheme")?;
 
     // 2. Extract the field dictionary from the Trie for use in parsing the script

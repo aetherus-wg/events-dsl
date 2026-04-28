@@ -9,7 +9,7 @@
 use std::collections::HashMap;
 
 use aetherus_events::{SrcId as DomainSrcId, ledger::SrcName};
-use encoding_spec::{
+use et_encoding::{
     bits::BitsMatch,
     pattern::{self, Pattern},
     trie::Trie,
@@ -115,38 +115,38 @@ impl Check<&[u32]> for Match {
     }
 }
 
-impl Into<encoding_spec::SrcId> for SrcId<'_> {
-    fn into(self) -> encoding_spec::SrcId {
+impl Into<et_encoding::SrcId> for SrcId<'_> {
+    fn into(self) -> et_encoding::SrcId {
         match self {
-            Self::None            => encoding_spec::SrcId::SrcId,
-            Self::Mat(_)          => encoding_spec::SrcId::MatId,
-            Self::Surf(_)         => encoding_spec::SrcId::SurfId,
-            Self::MatSurf(_)      => encoding_spec::SrcId::MatSurfId,
-            Self::Light(_)        => encoding_spec::SrcId::LightId,
-            Self::Detector(_)     => encoding_spec::SrcId::DetectorId,
-            Self::MatName(_)      => encoding_spec::SrcId::MatId,
-            Self::SurfName(_)     => encoding_spec::SrcId::SurfId,
-            Self::MatSurfName(_)  => encoding_spec::SrcId::MatSurfId,
-            Self::LightName(_)    => encoding_spec::SrcId::LightId,
-            Self::DetectorName(_) => encoding_spec::SrcId::DetectorId,
+            Self::None            => et_encoding::SrcId::SrcId,
+            Self::Mat(_)          => et_encoding::SrcId::MatId,
+            Self::Surf(_)         => et_encoding::SrcId::SurfId,
+            Self::MatSurf(_)      => et_encoding::SrcId::MatSurfId,
+            Self::Light(_)        => et_encoding::SrcId::LightId,
+            Self::Detector(_)     => et_encoding::SrcId::DetectorId,
+            Self::MatName(_)      => et_encoding::SrcId::MatId,
+            Self::SurfName(_)     => et_encoding::SrcId::SurfId,
+            Self::MatSurfName(_)  => et_encoding::SrcId::MatSurfId,
+            Self::LightName(_)    => et_encoding::SrcId::LightId,
+            Self::DetectorName(_) => et_encoding::SrcId::DetectorId,
         }
     }
 }
 
 impl SrcId<'_> {
-    pub fn to_encoding_src_id(&self) -> encoding_spec::SrcId {
+    pub fn to_encoding_src_id(&self) -> et_encoding::SrcId {
         match self {
-            Self::None            => encoding_spec::SrcId::SrcId,
-            Self::Mat(_)          => encoding_spec::SrcId::MatId,
-            Self::Surf(_)         => encoding_spec::SrcId::SurfId,
-            Self::MatSurf(_)      => encoding_spec::SrcId::MatSurfId,
-            Self::Light(_)        => encoding_spec::SrcId::LightId,
-            Self::Detector(_)     => encoding_spec::SrcId::DetectorId,
-            Self::MatName(_)      => encoding_spec::SrcId::MatId,
-            Self::SurfName(_)     => encoding_spec::SrcId::SurfId,
-            Self::MatSurfName(_)  => encoding_spec::SrcId::MatSurfId,
-            Self::LightName(_)    => encoding_spec::SrcId::LightId,
-            Self::DetectorName(_) => encoding_spec::SrcId::DetectorId,
+            Self::None            => et_encoding::SrcId::SrcId,
+            Self::Mat(_)          => et_encoding::SrcId::MatId,
+            Self::Surf(_)         => et_encoding::SrcId::SurfId,
+            Self::MatSurf(_)      => et_encoding::SrcId::MatSurfId,
+            Self::Light(_)        => et_encoding::SrcId::LightId,
+            Self::Detector(_)     => et_encoding::SrcId::DetectorId,
+            Self::MatName(_)      => et_encoding::SrcId::MatId,
+            Self::SurfName(_)     => et_encoding::SrcId::SurfId,
+            Self::MatSurfName(_)  => et_encoding::SrcId::MatSurfId,
+            Self::LightName(_)    => et_encoding::SrcId::LightId,
+            Self::DetectorName(_) => et_encoding::SrcId::DetectorId,
         }
     }
 }
@@ -366,9 +366,9 @@ impl<'src> Expr<'src> {
     pub fn resolve_src(
         &self,
         src_dict: &HashMap<SrcName, DomainSrcId>,
-    ) -> Result<(encoding_spec::SrcId, Match), Error> {
+    ) -> Result<(et_encoding::SrcId, Match), Error> {
         Ok(match self {
-            Self::X => (encoding_spec::SrcId::SrcId, Match::X),
+            Self::X => (et_encoding::SrcId::SrcId, Match::X),
             Self::SrcId(src_id) => {
                 debug!("Resolving source identifier: {:?}", src_id);
                 let src_bits_match = src_id
@@ -389,7 +389,7 @@ impl<'src> Expr<'src> {
                     .collect::<Result<_, _>>()?;
                 let src_id_type = src_id_matches
                     .iter()
-                    .fold(encoding_spec::SrcId::SrcId, |acc, (src_id, _)| {
+                    .fold(et_encoding::SrcId::SrcId, |acc, (src_id, _)| {
                         acc.combine(&src_id).unwrap()
                     });
                 let src_id_match = Match::Any(
@@ -414,7 +414,7 @@ impl<'src> Expr<'src> {
         &self,
         src_dict: &HashMap<SrcName, DomainSrcId>,
         trie: &Trie,
-        resolved_src: &HashMap<&'src str, (encoding_spec::SrcId, Match)>,
+        resolved_src: &HashMap<&'src str, (et_encoding::SrcId, Match)>,
     ) -> Result<Match, Error> {
         Ok(match self {
             Self::X => Match::X,
@@ -478,7 +478,7 @@ impl<'src> Expr<'src> {
         &self,
         src_dict: &HashMap<SrcName, DomainSrcId>,
         trie: &Trie,
-        resolved_src: &HashMap<&'src str, (encoding_spec::SrcId, Match)>,
+        resolved_src: &HashMap<&'src str, (et_encoding::SrcId, Match)>,
         resolved_pattern: &HashMap<&'src str, Match>,
     ) -> Result<SeqTree, Error> {
         Ok(match self {
@@ -554,7 +554,7 @@ impl<'src> Expr<'src> {
         &self,
         src_dict: &HashMap<SrcName, DomainSrcId>,
         trie: &Trie,
-        resolved_src: &HashMap<&'src str, (encoding_spec::SrcId, Match)>,
+        resolved_src: &HashMap<&'src str, (et_encoding::SrcId, Match)>,
         resolved_pattern: &HashMap<&'src str, Match>,
         resolved_seq: &HashMap<&'src str, SeqTree>,
     ) -> Result<RuleCond, Error> {
@@ -631,7 +631,7 @@ impl<'src> Expr<'src> {
         &self,
         src_dict: &HashMap<SrcName, DomainSrcId>,
         trie: &Trie,
-        resolved_src: &HashMap<&'src str, (encoding_spec::SrcId, Match)>,
+        resolved_src: &HashMap<&'src str, (et_encoding::SrcId, Match)>,
         resolved_pattern: &HashMap<&'src str, Match>,
         resolved_seq: &HashMap<&'src str, SeqTree>,
     ) -> Result<Rule, Error> {

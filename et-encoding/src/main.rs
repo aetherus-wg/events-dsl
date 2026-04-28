@@ -1,8 +1,8 @@
 use anyhow::{Result};
-use encoding_spec::SrcId;
-use encoding_spec::parser::{parse_encodings, resolved_dir_encodings};
-use encoding_spec::pattern::{self, Pattern};
-use encoding_spec::trie::Trie;
+use et_encoding::SrcId;
+use et_encoding::parser::{parse_encodings, resolved_dir_encodings};
+use et_encoding::pattern::{self, Pattern};
+use et_encoding::trie::Trie;
 use std::env;
 use std::fs;
 

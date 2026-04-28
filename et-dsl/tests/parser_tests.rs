@@ -1,7 +1,7 @@
 use chumsky::{Parser, input::Input};
-use eldritch_dsl::ast::{DeclType, Expr};
-use eldritch_dsl::parse::expr_parser;
-use eldritch_dsl::token::lexer;
+use et_dsl::ast::{DeclType, Expr};
+use et_dsl::parse::expr_parser;
+use et_dsl::token::lexer;
 use std::collections::HashSet;
 
 fn default_dict() -> HashSet<String> {
@@ -22,7 +22,7 @@ fn default_dict() -> HashSet<String> {
     dict
 }
 
-fn parse_script(src: &str) -> Vec<eldritch_dsl::ast::Declaration<'_>> {
+fn parse_script(src: &str) -> Vec<et_dsl::ast::Declaration<'_>> {
     let dict = default_dict();
     let tokens = lexer(&dict).parse(src).unwrap();
     expr_parser()

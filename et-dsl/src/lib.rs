@@ -15,7 +15,7 @@
 //! ## Example
 //!
 //! ```rust
-//! use eldritch_dsl::{parse_script, ast::DeclType};
+//! use et_dsl::{parse_script, ast::DeclType};
 //!
 //! let script = r#"
 //!     src water = Mat("seawater")
@@ -72,8 +72,8 @@ pub type Spanned<T> = (T, Span);
 /// ```ignored
 /// FIXME: This example is ignored because BitsMatch provinence is in encodinc_spec,
 /// but it should be move in a common core crate, after we restructure in a workspace
-/// use eldritch_dsl::model::{Match, BitsMatch};
-/// use eldritch_dsl::Check;
+/// use et_dsl::model::{Match, BitsMatch};
+/// use et_dsl::Check;
 ///
 /// let bm = BitsMatch { mask: 0xFF, value: 0x42 };
 /// let m = Match::Bits(bm);
@@ -201,7 +201,7 @@ pub fn extract_signals_path(
 /// # Example
 ///
 /// ```rust
-/// use eldritch_dsl::parse_script;
+/// use et_dsl::parse_script;
 ///
 /// let script = r#"
 ///     src water = Mat("seawater")

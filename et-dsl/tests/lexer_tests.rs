@@ -1,5 +1,5 @@
 use chumsky::Parser;
-use eldritch_dsl::token::{Token, lexer};
+use et_dsl::token::{Token, lexer};
 use std::collections::HashSet;
 
 fn default_dict() -> HashSet<String> {

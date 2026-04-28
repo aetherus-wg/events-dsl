@@ -2,7 +2,7 @@ use std::{collections::HashMap};
 use rand::RngExt;
 
 use aetherus_events::{SrcId as DomainSrcId, ledger::SrcName};
-use eldritch_dsl::ast::{Repetition, SrcId};
+use et_dsl::ast::{Repetition, SrcId};
 
 #[test]
 fn test_repetition_unit() {
@@ -164,30 +164,30 @@ fn test_src_id_resolve() {
 fn test_src_id_to_encoding_src_id() {
     assert!(matches!(
         SrcId::Mat(5).to_encoding_src_id(),
-        encoding_spec::SrcId::MatId
+        et_encoding::SrcId::MatId
     ));
     assert!(matches!(
         SrcId::MatName("seawater").to_encoding_src_id(),
-        encoding_spec::SrcId::MatId
+        et_encoding::SrcId::MatId
     ));
     assert!(matches!(
         SrcId::Surf(3).to_encoding_src_id(),
-        encoding_spec::SrcId::SurfId
+        et_encoding::SrcId::SurfId
     ));
     assert!(matches!(
         SrcId::MatSurf(1).to_encoding_src_id(),
-        encoding_spec::SrcId::MatSurfId
+        et_encoding::SrcId::MatSurfId
     ));
     assert!(matches!(
         SrcId::Light(0).to_encoding_src_id(),
-        encoding_spec::SrcId::LightId
+        et_encoding::SrcId::LightId
     ));
     assert!(matches!(
         SrcId::Detector(2).to_encoding_src_id(),
-        encoding_spec::SrcId::DetectorId
+        et_encoding::SrcId::DetectorId
     ));
     assert!(matches!(
         SrcId::None.to_encoding_src_id(),
-        encoding_spec::SrcId::SrcId
+        et_encoding::SrcId::SrcId
     ));
 }

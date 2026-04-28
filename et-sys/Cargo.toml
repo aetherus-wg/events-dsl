@@ -1,0 +1,10 @@
+[package]
+name = "et-sys"
+version.workspace = true
+license.workspace = true
+edition.workspace = true
+readme.workspace = true
+repository.workspace = true
+description = "Eldritch-Trace FFI bindings for .et DSL"
+
+[dependencies]
