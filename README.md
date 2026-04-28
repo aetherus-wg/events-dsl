@@ -1,5 +1,12 @@
 # Eldritch-Trace filtering DSL
 
+<!-- TODO: Add docs badge -->
+<!-- TODO: Add crates.io badge -->
+[![build](https://img.shields.io/github/actions/workflow/status/aetherus-wg/eldritch-trace/build-test.yml?branch=main&style=flat-square)](https://github.com/aetherus-wg/eldritch-trace/actions)
+[![License](https://img.shields.io/badge/license-MIT%20%2B%20Apache%202.0-yellow?style=flat-square)](#license)
+[![User Guide](https://img.shields.io/badge/User%20Guide-mdBook-blue)](https://aetherus-wg.github.io/eldritch-trace/)
+[![GitHub tag (latest SemVer)](https://img.shields.io/github/v/tag/aetherus-wg/eldritch-trace?sort=semver)](https://github.com/aetherus-wg/eldritch-trace/tags)
+
 This project defines the grammar of our DSL, implements the parser and
 translation to the AST to be used by the filtering methods in `aetherus-events`.
 
