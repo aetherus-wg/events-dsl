@@ -3,6 +3,9 @@ title = "Eldritch-Trace Documentation"
 description = "User Guide and Languare Reference Manual for .et DSL"
 authors = ["Cristian Bourceanu"]
 
+[build]
+build-dir = "build"
+
 [output.html]
 git-repository-url = "https://github.com/aetherus-wg/eldritch-trace"
 
