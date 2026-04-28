@@ -21,7 +21,8 @@
 //!     src water = Mat("seawater")
 //!     pattern water_interaction = Material | Elastic | X | water
 //! "#;
-//! let decls = parse_script(script);
+//! let dict = ["MCRT", "Material", "Elastic"].iter().map(|s| s.to_string()).collect();
+//! let decls = parse_script(script, &dict);
 //!
 //! for decl in &decls {
 //!     println!("{}: {:?}", decl.name, decl.decl_type);
@@ -68,7 +69,9 @@ pub type Spanned<T> = (T, Span);
 ///
 /// # Example
 ///
-/// ```rust
+/// ```ignored
+/// FIXME: This example is ignored because BitsMatch provinence is in encodinc_spec,
+/// but it should be move in a common core crate, after we restructure in a workspace
 /// use eldritch_dsl::model::{Match, BitsMatch};
 /// use eldritch_dsl::Check;
 ///
@@ -202,10 +205,12 @@ pub fn extract_signals_path(
 ///
 /// let script = r#"
 ///     src water = Mat("seawater")
-///     pattern interaction = Material | Elastic
-///     rule forward = Material => Elastic
+///     pattern interaction = Material | Elastic | water
+///     rule forward = {
+///       Material | Elastic | water,
+///     }
 /// "#;
-/// let field_dict = ["MCRT", "Material", "Elastic"].iter().collect();
+/// let field_dict = ["MCRT", "Material", "Elastic"].iter().map(|s| s.to_string()).collect();
 ///
 /// let decls = parse_script(script, &field_dict);
 /// for decl in &decls {
