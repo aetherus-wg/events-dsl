@@ -10,4 +10,4 @@ itertools = "0.14.0"
 log = "0.4.29"
 markdown-ppp = "2.9.2"
 regex = "1.12.3"
-aetherus-events = { path = "../../aetherus-events", version = "^0.1.8" }
+aetherus-events = { git = "https://github.com/aetherus-wg/aetherus-events", version = "^0.1.8" }
