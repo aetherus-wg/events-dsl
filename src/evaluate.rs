@@ -112,6 +112,8 @@ pub fn find_uids_with_rule(ledger: &Ledger, rule: &Rule) -> Result<Vec<Uid>> {
     }
 
     // Ledger traversal loop
+    // TODO: Entries in the stack can be evaluated in parallel
+    // and querry of the Ledger should not require a lock, since the Ledger is immutable
     while !stack.is_empty() {
         let mut rule = stack.pop().unwrap();
 
