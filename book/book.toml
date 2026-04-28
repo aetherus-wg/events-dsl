@@ -5,6 +5,9 @@ authors = ["Cristian Bourceanu"]
 language = "en"
 src = "src"
 
+[build]
+build-dir = "build"
+
 [output.html]
 additional-js = [
   "theme/et-highlight.js"
