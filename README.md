@@ -3,8 +3,9 @@
 This project defines the grammar of our DSL, implements the parser and
 translation to the AST to be used by the filtering methods in `aetherus-events`.
 
-> ![NOTE] While we present the DSL focused here on MCRT simulation,
-> it can filter and parse and encoding that can fitted for `aetherus-events`
+> [!NOTE] 
+> While we present the DSL focused here on MCRT simulation,
+> it can filter and parse any encoding that can be fitted for `aetherus-events`
 
 ## Overview
 
@@ -19,6 +20,11 @@ Example of conditions used for filtering:
 - sequence of events
 - count repetitions of events matching a pattern
 - etc.
+
+The following `Eldritch-Trace` script can be use to filter events presented in
+the Ledger serialised further down.
+
+<img src="./imgs/script_dsl_syntax_highlighted.png" alt="Eldritch-Trace DSL script">
 
 ```json
 {
@@ -69,7 +75,6 @@ Example of conditions used for filtering:
   }
 }
 ```
-<img src="./imgs/script_dsl_syntax_highlighted.png" alt="Eldritch-Trace DSL script">
 
 ## Specification
 
@@ -79,14 +84,17 @@ Architecture](./imgs/DSL_Filtering_Architecture.excalidraw.png)
 ## Predicates
 
 Sequence, patterns and fields can have unary predicates.
-- "!": Don't match
-- "?": Optional, can appear once or none
-- "*": Match for any number of times
-- "+": Match for any number of times that find at least one match
-- "{n,m}": Match for at least n times and at most m times
-- "{,m}": Match for at most m times
-- "{n,}": Match for at least n times
-- "{n}: Match exactly n times
+
+| Operator | Description                                                |
+|----------|------------------------------------------------------------|
+| `!`        | Don't match                                                |
+| `?`        | Optional, can appear once or none                          |
+| `*`        | Match for any number of times                              |
+| `+`        | Match for any number of times that find at least one match |
+| `{n,m}`    | Match for at least n times and at most m times             |
+| `{,m}`     | Match for at most m times                                  |
+| `{n,}`     | Match for at least n times                                 |
+| `{n}`      | Match exactly n times                                      |
 
 ### Field
 
@@ -102,7 +110,7 @@ Patterns can have any of the unary predicates listed above
 Sequences can only have an "{n}" predicate that will be unrolled and flatten the
 sequence.
 
-> ![NOTE]
+> [!NOTE]
 > More advanced features to check for non match with "!" could be added later for
 > more complex checks on the sequence, but otherwise keep it simple.
 
@@ -110,8 +118,8 @@ sequence.
 
 - `any`: Allow match to any of the members listed
   - `src`
-  - `field`: Not allowed for now
   - `pattern`
+  - `seq`: Not allowed for now, not sure if necessary
 - `perm`: Allow match in any order
   - `pattern`
 - `seq`: Allow match in the order specified
@@ -128,6 +136,11 @@ sequence.
 
 ## TODO
 
+- [ ] Benchmarks with [bencher](https://bencher.dev) for [Statistical Continuous
+  Benchmarking](https://bencher.dev/docs/how-to/track-benchmarks/#statistical-continuous-benchmarking)
+  - [ ] Criterion benchmarking of a the translucent plate example
+  - [ ] Inline tests benches using `libtest`
+  - Maybe add [gungraun](https://github.com/gungraun/gungraun) later for more informative performance metrics
 - [X] Vim syntax highlight
 - [ ] Tree-sitter parser and syntax highlight
   - [tree-sitter docs](https://tree-sitter.github.io/tree-sitter/)
