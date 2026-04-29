@@ -1,10 +1,14 @@
+//! This module defines the BitsRange and BitsMatch types for encoding and matching specific bit fields in event encodings.
+
 use anyhow::{Error, Result, anyhow};
 use std::str::FromStr;
 
+/// BitsRange represents a range of bits in the encoded event, specified in "end:start" Verilog style (e.g., "31:28" for bits 31 down to 28).
 #[derive(Debug, PartialEq)]
 pub struct BitsRange(usize, usize); // (end, start) - "end:start" Verilog style
 
 impl BitsRange {
+    /// The size of the range can be calculated as end - start + 1.
     pub fn size(&self) -> usize {
         self.0 - self.1 + 1
     }
@@ -27,13 +31,17 @@ impl FromStr for BitsRange {
     }
 }
 
+/// BitsMatch represents a bitmask and value for matching specific bits in the encoded event. The mask indicates which bits to check, and the value indicates the expected values of those bits.
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct BitsMatch {
+    /// Bits mask
     pub mask: u32,
+    /// Bits value
     pub value: u32,
 }
 
 impl BitsMatch {
+    /// Checks if the given encoded event matches the BitsMatch criteria by applying the mask and comparing to the value.
     pub fn check(&self, event_encoded: u32) -> bool {
         self.mask & event_encoded == self.value
     }
@@ -62,6 +70,7 @@ impl std::fmt::Debug for BitsMatch {
 }
 
 impl BitsMatch {
+    /// Parses a string representation of bits (binary, hex, decimal, or don't care) according to the specified BitsRange and returns a BitsMatch
     pub fn parse(bits_range: &BitsRange, input: &str) -> Result<Self> {
         let num_bits = bits_range.0 - bits_range.1 + 1;
         let lsb_pos = bits_range.1;
@@ -114,6 +123,8 @@ impl BitsMatch {
         }
     }
 
+    /// Combines two BitsMatch instances by merging their masks and values.
+    /// WARN: If there are overlapping bits in the masks, they must have the same value for those bits to be combined successfully.
     pub fn combine(&self, other: &BitsMatch) -> BitsMatch {
         assert!(
             self.mask & other.mask == 0

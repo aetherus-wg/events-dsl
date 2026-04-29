@@ -1,3 +1,5 @@
+//! This module provides functionality to parse encoding definitions from markdown tables.
+
 use crate::bits::{BitsMatch, BitsRange};
 use crate::trie::{Encoding, Field};
 use anyhow::anyhow;
@@ -16,6 +18,7 @@ fn unwrap_inline(inline: &Inline) -> Result<String> {
     }
 }
 
+/// Parses a markdown string containing encoding definitions in tables and returns a vector of Encoding.
 pub fn parse_encodings(src: &str) -> Result<Vec<Encoding>> {
     let state = MarkdownParserState::new();
     let document =

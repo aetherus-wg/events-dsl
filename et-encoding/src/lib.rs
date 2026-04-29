@@ -1,3 +1,20 @@
+//! Encoding parser and single source of truth provider
+//!
+//! This library parses the 32-bit encoding of the events,
+//! described in markdown table as ranges of bits with names, values and optional attributes.
+//!
+//! Each field might be any of the following
+//!  - Named field with a specific value (or __partial__ value)
+//!  - Don't care ("X" or "_") - matches any value
+//!  - Reserved field ("_<reserved_field_name") which is ignored in building the encodign Trie.
+//!
+//! Once parsed, the encoding names and values are organised in a Trie with all possible matching
+//! described, including X values. The Trie is used to generate the BitsMatch condition for an
+//! encoding to match with the pattern provided(pattern = list of named fields concatenated)
+//!
+//! Parsing the encoding specification, also provides us with a list of all named fields,
+//! which are used as the dictionary for parsing the pattern described in the script with the et-dsl crate.
+
 use std::{fmt::Display, str::FromStr};
 
 use anyhow::{Error, Result, anyhow};
@@ -12,13 +29,20 @@ pub mod parser;
 pub mod pattern;
 pub mod trie;
 
+/// This enum represents the different types of source identifiers that can be used in the encoding patterns.
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum SrcId {
+    /// A generic source identifier representing the abstract SrcId
     SrcId,
+    /// Union of MatId and SurfId, generally used to describe a transparent object
     MatSurfId,
+    /// Material identifier type
     MatId,
+    /// Surface identifier type
     SurfId,
+    /// Light/Emitter identifier type
     LightId,
+    /// Detector identifier type
     DetectorId,
 }
 
@@ -51,6 +75,10 @@ impl Display for SrcId {
 }
 
 impl SrcId {
+    /// Combine two SrcId types to return most restrictive type,
+    /// or None if the types are on disjoint branches of the type hierarchy.
+    /// Functionality is identical to Julia type multiple dispatch,
+    /// choosing most restrictive type.
     pub fn combine(&self, other: &SrcId) -> Option<SrcId> {
         Some(match (self, other) {
             (SrcId::SrcId,      SrcId::MatSurfId ) => SrcId::MatSurfId,
@@ -74,6 +102,7 @@ impl SrcId {
     }
 }
 
+/// Builds a Trie decoder from the given encoding specification string.
 pub fn build_decoder(src: &str) -> Result<Trie> {
     let encodings = parse_encodings(src)?;
     let dir_encodings = resolved_dir_encodings(&encodings);

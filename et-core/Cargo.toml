@@ -8,3 +8,6 @@ description = "Eldritch-Trace core data structs"
 repository.workspace = true
 
 [dependencies]
+
+[lints]
+workspace = true

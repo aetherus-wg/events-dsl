@@ -7,11 +7,10 @@ use chumsky::{input::ValueInput, prelude::*};
 
 use crate::{
     ast::{DeclType, Declaration, Expr, Repetition, SrcId},
-    token::Token,
+    lexer::Token,
 };
 
-pub type Span = SimpleSpan;
-pub type Spanned<T> = (T, Span);
+type Span = SimpleSpan;
 
 /// Creates an expression parser for the filter DSL.
 ///

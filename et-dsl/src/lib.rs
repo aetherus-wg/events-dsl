@@ -36,28 +36,25 @@
 //! - [`evaluate`] - Rule evaluation
 //! - [`model`] - Semantic model
 //! - [`parse`] - Parser implementation
-//! - [`token`] - Tokenizer
+//! - [`mod@lexer`] - Lexer/Tokenizer
 
 pub mod ast;
 pub mod error;
 pub mod evaluate;
 pub mod model;
 pub mod parse;
-pub mod token;
+pub mod lexer;
 
 use crate::{
     ast::{Declaration, Expr},
     parse::expr_parser,
-    token::lexer,
+    lexer::lexer,
 };
 use ariadne::{Color, Label, Report, ReportKind, sources};
 use chumsky::{Parser, error::Rich, input::Input, span::SimpleSpan};
 use itertools::Itertools;
 use log::debug;
 use std::{collections::HashSet, path::Path};
-
-pub type Span = SimpleSpan;
-pub type Spanned<T> = (T, Span);
 
 // -----------------------------------------------
 // Model traits and helpers

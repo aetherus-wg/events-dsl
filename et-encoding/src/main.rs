@@ -6,6 +6,7 @@ use et_encoding::trie::Trie;
 use std::env;
 use std::fs;
 
+/// This binary reads an encoding scheme from a file, builds a Trie decoder, and demonstrates pattern matching on the Trie.
 fn main() -> Result<()> {
     env_logger::init();
 

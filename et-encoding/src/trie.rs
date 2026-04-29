@@ -1,18 +1,26 @@
 use crate::{
     SrcId,
     bits::BitsMatch,
-    pattern::{Pattern, search_trie},
+    pattern::{self, Pattern, search_trie},
 };
 use anyhow::{Error, Result, anyhow};
 use std::{collections::HashSet, str::FromStr};
 
+/// Field similar to [`pattern::Field`], explicit definition from the encoding spec
 #[derive(Debug, Clone, Hash)]
-pub enum Field {
+pub(crate) enum Field {
+    /// Don't care, with attribute to hot swap all valid values with the same attribute
+    /// i.e. `X {Direction}` might take the value from `Forward {Direction}`, etc. from another
+    /// entry in the Trie. This enables compact specification, but ability to fully expand the
+    /// Trie to all possible encodings.
     X {
         attr: Option<String>,
         size: usize,
     },
+    /// SrcId type
     SrcId(SrcId),
+    /// Named field with a specific value (or __partial__ value) and optional attribute that can
+    /// be used to hot swap in X or identify SrcId type
     Named {
         name: String,
         attr: Option<String>,
@@ -22,6 +30,7 @@ pub enum Field {
 }
 
 impl Field {
+    /// Returns the BitsMatch condition for this field
     pub fn bits_match(&self) -> &BitsMatch {
         match self {
             Field::X { .. }           => &BitsMatch { mask: 0, value: 0 },
@@ -29,6 +38,7 @@ impl Field {
             Field::Named { bits, .. } => bits,
         }
     }
+    /// Bits size of this field
     pub fn size(&self) -> usize {
         match self {
             Field::X { size, .. }     => *size,
@@ -93,9 +103,11 @@ impl PartialEq for Field {
 }
 impl Eq for Field {}
 
+/// Encoding represents a complete encoding pattern, which is a sequence of fields that together define full or partial 32-bit encoding. By partial, we mean that some fields could be considered don't care.
 #[derive(Debug)]
 pub struct Encoding(pub Vec<Field>);
 
+/// This macro provides a convenient way to construct an Encoding from a list of field names and their corresponding bit patterns, along with a final SrcId field.
 #[macro_export]
 macro_rules! encoding {
     ($($field:ident, $bits:expr),* ,$src_id:ident) => {
@@ -107,6 +119,7 @@ macro_rules! encoding {
     };
 }
 
+/// TrieNode represents a node in the trie, which can be either a terminal node (representing a complete encoding) or an internal node with children representing possible next fields in the encoding pattern.
 // FIXME: no need for public fields
 #[derive(Debug, Hash, PartialEq, Eq)]
 pub struct TrieNode {
@@ -114,6 +127,7 @@ pub struct TrieNode {
     pub children: Vec<(Field, TrieNode)>,
 }
 
+/// Trie represents the root of the trie data structure
 #[derive(Debug)]
 pub struct Trie {
     pub root: TrieNode,
@@ -239,12 +253,14 @@ impl TrieNode {
         }
     }
 
+    /// Returns a mutable reference to the child node corresponding to the given field, if it exists.
     pub fn get_mut(&mut self, field: &Field) -> Option<&mut TrieNode> {
         self.children
             .iter_mut()
             .find_map(|(f, node)| if f == field { Some(node) } else { None })
     }
 
+    /// Inserts a new child node for the given field, if it does not already exist.
     pub fn insert_new(&mut self, field: &Field) {
         self.children.push((field.clone(), TrieNode::new()));
     }

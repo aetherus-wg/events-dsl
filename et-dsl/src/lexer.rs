@@ -1,14 +1,15 @@
-//! Token - Lexer tokens for the filter DSL
+//! Lexer tokens for the filter DSL
 //!
 //! This module defines the tokens produced by the lexer
-//! before parsing into the AST.
+//! before parsing into the AST and the parser of the source string
+//! into the tokens list.
 
 use std::{collections::HashSet, fmt};
 
 use chumsky::prelude::*;
 
-pub type Span = SimpleSpan;
-pub type Spanned<T> = (T, Span);
+type Span = SimpleSpan;
+type Spanned<T> = (T, Span);
 
 /// Tokens produced by the lexer.
 ///
@@ -25,7 +26,8 @@ pub enum Token<'src> {
     Ctrl(char), // '=', '[', ']', ',' , '{', '}'
     /// Repetition operators: '*', '+', '?', '!'
     Predicates(char), // '*', '+', '?', ! = {0,}, {1,}, {0,1}, 0
-    Concat,     // '|' Concatenation operator
+    /// '|' Concatenation operator
+    Concat,
     /// 'X'=DontCare - Matches any event field or pattern
     X,
     /// "any[" ... "]" matches any field/pattern with the specified values
@@ -36,11 +38,11 @@ pub enum Token<'src> {
     Seq,
     /// "src <src_ident> = <expr>"
     SrcDecl,
-    /// "pattern <pattern_ident> = <expr>"
+    /// "pattern `pattern_ident` = `expr`"
     PatternDecl,
-    /// - "sequence <seq_ident> = seq?[]" enumerates patterns in sequence order
+    /// - "sequence `seq_ident` = seq?[]" enumerates patterns in sequence order
     SeqDecl,
-    /// "rule <rule_ident> = { <expr> }"
+    /// "rule `rule_ident` = { <expr> }"
     RuleDecl,
     /// Identifiers for src ids, patterns and sequences
     Ident(&'src str),
@@ -52,9 +54,13 @@ pub enum Token<'src> {
     /// <SrcIdName>(<value>) where value can be hex/dec
     // "match for "MatId", "MatSurfId", "SurfId", "LightId", "DetectorId": <SrcIdName>("<name>") or
     SrcId(&'src str),
+    /// String literals
     Str(&'src str),
+    /// Numeric literals (e.g., repetition counts, SrcId values)
     Num(u16),
+    /// `ledger` keyword
     Ledger,
+    /// `signals` keyword
     Signals,
 }
 
@@ -83,6 +89,7 @@ impl fmt::Display for Token<'_> {
     }
 }
 
+/// The lexer for the Eldritch-Trace filter DSL.
 pub fn lexer<'src>(dict: &HashSet<String>
 ) -> impl Parser<'src, &'src str, Vec<Spanned<Token<'src>>>, extra::Err<Rich<'src, char, Span>>> {
 

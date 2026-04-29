@@ -1,7 +1,7 @@
 use chumsky::{Parser, input::Input};
 use et_dsl::ast::{DeclType, Expr};
 use et_dsl::parse::expr_parser;
-use et_dsl::token::lexer;
+use et_dsl::lexer::lexer;
 use std::collections::HashSet;
 
 fn default_dict() -> HashSet<String> {

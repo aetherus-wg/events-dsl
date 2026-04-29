@@ -12,40 +12,38 @@ use aetherus_events::{SrcId as DomainSrcId, ledger::SrcName};
 
 use crate::error::Error;
 
-pub type Span = SimpleSpan;
-pub type Spanned<T> = (T, Span);
+pub(crate) type Span = SimpleSpan;
+pub(crate) type Spanned<T> = (T, Span);
 
 /// Represents an event source identifier.
 ///
 /// Source IDs identify where events originate from in the simulation.
 /// They can be either resolved (numeric encoding) or unresolved (named).
-///
-/// Variants:
-/// - `None`                    - No source specified
-/// - `Mat(u16)`                - Material source with numeric ID
-/// - `Surf(u16)`               - Surface source with numeric ID
-/// - `MatSurf(u16)`            - Material-Surface source with numeric ID
-/// - `Light(u16)`              - Light source with numeric ID
-/// - `Detector(u16)`           - Detector source with numeric ID
-/// - `MatName(&'src str)`      - Material source by name (to be resolved)
-/// - `SurfName(&'src str)`     - Surface source by name
-/// - `MatSurfName(&'src str)`  - Material-Surface source by name
-/// - `LightName(&'src str)`    - Light source by name
-/// - `DetectorName(&'src str)` - Detector source by name
 #[derive(Debug, Clone)]
-pub enum SrcId<'src> {
+pub(crate) enum SrcId<'src> {
+    /// No source specified (matches any source)
     None,
     // Resolved
+    /// Material source with numeric ID
     Mat(u16),
+    /// Surface source with numeric ID
     Surf(u16),
+    /// Material-Surface source with numeric ID
     MatSurf(u16),
+    /// Light/Emitter source with numeric ID
     Light(u16),
+    /// Detector source with numeric ID
     Detector(u16),
     // To look up
+    /// Material source by name (to be resolved)
     MatName(&'src str),
+    /// Surface source by name (to be resolved)
     SurfName(&'src str),
+    /// Material-Surface source by name (to be resolved)
     MatSurfName(&'src str),
+    /// Light/Emitter source by name (to be resolved)
     LightName(&'src str),
+    /// Detector source by name (to be resolved)
     DetectorName(&'src str),
 }
 
@@ -117,17 +115,26 @@ impl<'a> SrcId<'a> {
 /// | `Interval(n,m)` | `{n,m}`     | n to m times    |
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Repetition {
+    /// Exactly once
     Unit,                   // '' Pass-through, no repetition = {1,1}
-    Optional,               // '?' = {0,1}
-    OneOrMore,              // '+' = {1,}
-    ZeroOrMore,             // '*' = {0,}
-    NTimes(usize),          // '{n}' = {n,n}
-    AtLeast(usize),         //'{n,}': + = {1,}, * = {0,}
-    AtMost(usize),          // '{,m}' = {0,m}
-    Interval(usize, usize), // '{n,m}': ? = {0,1}
+    /// '?' = {0,1}
+    Optional,
+    /// '+' = {1,}
+    OneOrMore,
+    /// '*' = {0,}
+    ZeroOrMore,
+    /// '{n}' = {n,n}
+    NTimes(usize),
+    ///'{n,}': + = {1,}, * = {0,}
+    AtLeast(usize),
+    /// '{,m}' = {0,m}
+    AtMost(usize),
+    /// '{n,m}': ? = {0,1}
+    Interval(usize, usize),
 }
 
 impl Repetition {
+    /// Returns the minimum number of occurrences required for a match.
     pub fn min(&self) -> usize {
         match self {
             Self::Unit => 1,
@@ -140,6 +147,7 @@ impl Repetition {
             Self::Interval(n, _) => *n,
         }
     }
+    /// Returns the maximum number of occurrences allowed for a match, if bounded.
     pub fn max(&self) -> Option<usize> {
         match self {
             Self::Unit => Some(1),
@@ -152,6 +160,7 @@ impl Repetition {
             Self::Interval(_, m) => Some(*m),
         }
     }
+    /// Checks if a given count of occurrences satisfies this repetition constraint.
     pub fn check(&self, count: usize) -> bool {
         let min = self.min();
         let max = self.max();
@@ -164,35 +173,33 @@ impl Repetition {
 ///
 /// Expressions are the core building blocks of patterns and rules.
 /// They define what events to match and how to combine matching criteria.
-///
-/// Variants:
-/// - `X`                                      - Don't care / wildcard (matches anything)
-/// - `Ident(&'src str)`                       - User-defined identifier
-/// - `Field(&'src str)`                       - Event field (e.g., Material, Elastic)
-/// - `LedgerPath(&'src str)`                  - Path to ledger file
-/// - `SignalsPath(&'src str)`                 - Path to signals file
-/// - `Any(Vec<Spanned<Self>>)`                - Match any of several patterns
-/// - `Not(Box<Spanned<Self>>)`                - Negation
-/// - `Repeat(Repetition, Box<Spanned<Self>>)` - Repetition modifier
-/// - `Seq(Vec<Spanned<Self>>)`                - Sequence (ordered)
-/// - `Perm(Vec<Spanned<Self>>)`               - Permutation (any order)
-/// - `Rule(Vec<Spanned<Self>>)`               - Rule condition
-/// - `Pattern(Vec<Spanned<Self>>)`            - Pattern (alternation via `|`)
-/// - `SrcId(SrcId<'src>)`                     - Source ID reference
-pub enum Expr<'src> {
+pub(crate) enum Expr<'src> {
+    /// Don't care / wildcard (matches anything)
     X,
+    /// User-defined identifier
     Ident(&'src str),
+    /// Event field (e.g., Material, Elastic)
     Field(&'src str),
+    /// Path to ledger file
     LedgerPath(&'src str),
+    /// Path to signals file
     SignalsPath(&'src str),
+    /// Match any of several patterns
     Any(Vec<Spanned<Self>>),
 
+    /// Negation
     Not(Box<Spanned<Self>>),
+    /// Repetition modifier
     Repeat(Repetition, Box<Spanned<Self>>),
+    /// Sequence (ordered)
     Seq(Vec<Spanned<Self>>),
+    /// Permutation (any order)
     Perm(Vec<Spanned<Self>>),
+    /// Rule condition
     Rule(Vec<Spanned<Self>>), // e.g. (repetition, pattern), seq, pattern, !pattern
+    /// Pattern (alternation via `|`)
     Pattern(Vec<Spanned<Self>>), // e.g. MCRT | Material | Elastic | X | water_id
+    /// Source ID reference
     SrcId(SrcId<'src>),
 }
 
@@ -201,11 +208,17 @@ pub enum Expr<'src> {
 ///
 /// Indicates what kind of declaration a [`Declaration`] contains.
 pub enum DeclType {
+    /// SrcId declaration to match values described
     SrcId,
+    /// Pattern declaration as concatenation of fields
     Pattern,
+    /// Sequence declaration as ordered combination of patterns
     Sequence,
+    /// Rule declaration as combination of patterns and sequence conditions
     Rule,
+    /// Path of the ledger file to load
     LedgerPath,
+    /// Path of the signals file to load
     SignalsPath,
 }
 

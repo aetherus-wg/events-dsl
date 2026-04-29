@@ -31,23 +31,22 @@ use crate::{
 ///
 /// This is the runtime representation of a pattern that can be
 /// checked against event data to determine if there's a match.
-///
-/// Variants:
-/// - `X` - Wildcard (matches anything)
-/// - `Bits(BitsMatch)` - Bitwise pattern matching
-/// - `Not(Box<Match>)` - Negation of a pattern
-/// - `And(Box<Match>, Box<Match>)` - Conjunction (both must match)
-/// - `Any(Vec<Match>)` - Disjunction (any must match)
 #[derive(Debug, Clone, PartialEq)]
 pub enum Match {
+    /// Wildcard (matches anything)
     X,
+    /// Bitwise pattern matching
     Bits(BitsMatch),
+    /// Negation of a pattern
     Not(Box<Match>),
+    /// Conjunction (both must match)
     And(Box<Match>, Box<Match>),
+    /// Disjunction (any must match)
     Any(Vec<Match>),
 }
 
 impl Match {
+    /// Optimise the match by applying simplification rules.
     pub fn optimise(self) -> Self {
         match self {
             Match::And(ref left, ref right) => match (left.as_ref(), right.as_ref()) {
@@ -133,31 +132,16 @@ impl Into<et_encoding::SrcId> for SrcId<'_> {
     }
 }
 
-impl SrcId<'_> {
-    pub fn to_encoding_src_id(&self) -> et_encoding::SrcId {
-        match self {
-            Self::None            => et_encoding::SrcId::SrcId,
-            Self::Mat(_)          => et_encoding::SrcId::MatId,
-            Self::Surf(_)         => et_encoding::SrcId::SurfId,
-            Self::MatSurf(_)      => et_encoding::SrcId::MatSurfId,
-            Self::Light(_)        => et_encoding::SrcId::LightId,
-            Self::Detector(_)     => et_encoding::SrcId::DetectorId,
-            Self::MatName(_)      => et_encoding::SrcId::MatId,
-            Self::SurfName(_)     => et_encoding::SrcId::SurfId,
-            Self::MatSurfName(_)  => et_encoding::SrcId::MatSurfId,
-            Self::LightName(_)    => et_encoding::SrcId::LightId,
-            Self::DetectorName(_) => et_encoding::SrcId::DetectorId,
-        }
-    }
-}
-
 /// A predicate modifier for pattern matching.
 ///
 /// Applies additional constraints to patterns.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Predicate {
+    /// Unit=None - No additional predicate, just match the pattern as is
     Unit,
+    /// Not - Negate the pattern match ("! pattern")
     Not,
+    /// Repeat - Match a pattern with specified repetition ("{m,n} pattern")
     Repeat(Repetition),
 }
 
@@ -197,6 +181,7 @@ impl SeqTree {
         }
     }
 
+    /// Lower the SeqTree into a flat sequence of predicate-pattern pairs.
     pub fn lower(self) -> Seq {
         match self {
             SeqTree::Pattern(pred, pattern_match) => Seq(vec![(pred, pattern_match)]),

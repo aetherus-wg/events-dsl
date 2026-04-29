@@ -1,3 +1,5 @@
+//! Pattern matching against the Trie
+
 use std::collections::HashSet;
 
 use anyhow::Result;
@@ -9,16 +11,22 @@ use crate::{
     trie::{self, TrieNode},
 };
 
+/// Field type: Named field, SrcId type or don't care (X)
 #[derive(Debug)]
 pub enum Field<'a> {
+    /// Don't care
     X,
+    /// SrcId type field: MatId, SurfId, etc.
     SrcId(SrcId),
+    /// Named field: MCRT, Material, Elastic, etc.
     Field(&'a str),
 }
 
+/// Pattern is a sequence of fields that we want to match against the Trie
 #[derive(Debug)]
 pub struct Pattern<'a>(pub Vec<Field<'a>>);
 
+/// Search the Trie for the given pattern and return the combined BitsMatch and SrcId if a match is found
 pub fn search_trie(trie_node: &TrieNode, pattern: &Pattern) -> Result<(BitsMatch, SrcId)> {
     let mut encodings = Vec::new();
     #[derive(Clone, Hash, PartialEq, Eq)]
