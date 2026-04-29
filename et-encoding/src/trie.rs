@@ -1,12 +1,16 @@
+//! This module defines the Trie data structure used to store and query encoding patterns.
+//! The Trie allows for efficient querying of encoding patterns based on a given Pattern, which can contain named fields, SrcId fields, and don't care fields (X).
+//! The Trie also supports emitting a DOT string for visualization using graphviz.
+
 use crate::{
     SrcId,
-    bits::BitsMatch,
-    pattern::{self, Pattern, search_trie},
+    pattern::{Pattern, search_trie},
 };
+use et_core::bits::BitsMatch;
 use anyhow::{Error, Result, anyhow};
 use std::{collections::HashSet, str::FromStr};
 
-/// Field similar to [`pattern::Field`], explicit definition from the encoding spec
+/// Field similar to [`crate::pattern::Field`], explicit definition from the encoding spec
 #[derive(Debug, Clone, Hash)]
 pub(crate) enum Field {
     /// Don't care, with attribute to hot swap all valid values with the same attribute
@@ -105,7 +109,7 @@ impl Eq for Field {}
 
 /// Encoding represents a complete encoding pattern, which is a sequence of fields that together define full or partial 32-bit encoding. By partial, we mean that some fields could be considered don't care.
 #[derive(Debug)]
-pub struct Encoding(pub Vec<Field>);
+pub struct Encoding(pub(crate) Vec<Field>);
 
 /// This macro provides a convenient way to construct an Encoding from a list of field names and their corresponding bit patterns, along with a final SrcId field.
 #[macro_export]
@@ -122,15 +126,15 @@ macro_rules! encoding {
 /// TrieNode represents a node in the trie, which can be either a terminal node (representing a complete encoding) or an internal node with children representing possible next fields in the encoding pattern.
 // FIXME: no need for public fields
 #[derive(Debug, Hash, PartialEq, Eq)]
-pub struct TrieNode {
-    pub is_terminal: bool,
-    pub children: Vec<(Field, TrieNode)>,
+pub(crate) struct TrieNode {
+    pub(crate) is_terminal: bool,
+    pub(crate) children: Vec<(Field, TrieNode)>,
 }
 
 /// Trie represents the root of the trie data structure
 #[derive(Debug)]
 pub struct Trie {
-    pub root: TrieNode,
+    pub(crate) root: TrieNode,
 }
 
 impl Trie {
@@ -223,7 +227,7 @@ impl Trie {
     /// assert_eq!(bits_match, BitsMatch{mask: 0x0ff00000, value: 0x03600000});
     /// ```
     pub fn get(&self, query: &Pattern) -> Result<(BitsMatch, SrcId)> {
-        search_trie(&self.root, query)
+        search_trie(&self, query)
     }
 
     /// Returns a list of all fields
@@ -254,14 +258,14 @@ impl TrieNode {
     }
 
     /// Returns a mutable reference to the child node corresponding to the given field, if it exists.
-    pub fn get_mut(&mut self, field: &Field) -> Option<&mut TrieNode> {
+    pub(crate) fn get_mut(&mut self, field: &Field) -> Option<&mut TrieNode> {
         self.children
             .iter_mut()
             .find_map(|(f, node)| if f == field { Some(node) } else { None })
     }
 
     /// Inserts a new child node for the given field, if it does not already exist.
-    pub fn insert_new(&mut self, field: &Field) {
+    pub(crate) fn insert_new(&mut self, field: &Field) {
         self.children.push((field.clone(), TrieNode::new()));
     }
 }
@@ -270,7 +274,7 @@ impl TrieNode {
 mod tests {
     use super::*;
     use crate::SrcId;
-    use crate::bits::BitsMatch;
+    use et_core::bits::BitsMatch;
 
     fn make_named_field(name: &str, mask: u32, value: u32, size: usize) -> Field {
         Field::Named {

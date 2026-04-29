@@ -24,7 +24,6 @@ use crate::{
     trie::Trie,
 };
 
-pub mod bits;
 pub mod parser;
 pub mod pattern;
 pub mod trie;

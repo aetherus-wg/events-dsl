@@ -7,9 +7,9 @@ use log::{debug, trace};
 
 use crate::{
     SrcId,
-    bits::BitsMatch,
-    trie::{self, TrieNode},
+    trie::{self, Trie, TrieNode},
 };
+use et_core::bits::BitsMatch;
 
 /// Field type: Named field, SrcId type or don't care (X)
 #[derive(Debug)]
@@ -27,7 +27,7 @@ pub enum Field<'a> {
 pub struct Pattern<'a>(pub Vec<Field<'a>>);
 
 /// Search the Trie for the given pattern and return the combined BitsMatch and SrcId if a match is found
-pub fn search_trie(trie_node: &TrieNode, pattern: &Pattern) -> Result<(BitsMatch, SrcId)> {
+pub fn search_trie(trie: &Trie, pattern: &Pattern) -> Result<(BitsMatch, SrcId)> {
     let mut encodings = Vec::new();
     #[derive(Clone, Hash, PartialEq, Eq)]
     struct StackEntry<'a> {
@@ -101,7 +101,7 @@ pub fn search_trie(trie_node: &TrieNode, pattern: &Pattern) -> Result<(BitsMatch
         // next(node, !prev_x) -> (next(node), node==x)
         // next(node, prev_x)  -> (next(node), node==x)
         //                     -> (node, prev_x)
-        node: trie_node,
+        node: &trie.root,
         prev_trie_x: false,
         // pattern[idx] is the field that tries to consume the Trie
         pattern_index: 0,
@@ -234,7 +234,7 @@ mod tests {
     use super::*;
     use crate::SrcId;
     use crate::Trie;
-    use crate::bits::BitsMatch;
+    use et_core::bits::BitsMatch;
     use crate::trie::{Encoding, Field as TrieField};
 
     fn make_trie_named(name: &str, mask: u32, value: u32) -> TrieField {

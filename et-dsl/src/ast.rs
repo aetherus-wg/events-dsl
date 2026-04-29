@@ -9,6 +9,7 @@ use std::collections::HashMap;
 use chumsky::prelude::*;
 
 use aetherus_events::{SrcId as DomainSrcId, ledger::SrcName};
+use et_core::Repetition;
 
 use crate::error::Error;
 
@@ -98,76 +99,6 @@ impl<'a> SrcId<'a> {
     }
 }
 
-/// Specifies repetition count for pattern matching.
-///
-/// Defines how many times a pattern must occur for a match.
-/// Corresponds to quantifier syntax in the filter DSL.
-///
-/// | Variant         | DSL Syntax  | Meaning         |
-/// |-----------------|-------------|-----------------|
-/// | `Unit`          | (none)      | Exactly once    |
-/// | `Optional`      | `?`         | 0 or 1 times    |
-/// | `OneOrMore`     | `+`         | 1 or more times |
-/// | `ZeroOrMore`    | `*`         | 0 or more times |
-/// | `NTimes(n)`     | `{n}`       | Exactly n times |
-/// | `AtLeast(n)`    | `{n,}`      | n or more times |
-/// | `AtMost(n)`     | `{,n}`      | 0 to n times    |
-/// | `Interval(n,m)` | `{n,m}`     | n to m times    |
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Repetition {
-    /// Exactly once
-    Unit,                   // '' Pass-through, no repetition = {1,1}
-    /// '?' = {0,1}
-    Optional,
-    /// '+' = {1,}
-    OneOrMore,
-    /// '*' = {0,}
-    ZeroOrMore,
-    /// '{n}' = {n,n}
-    NTimes(usize),
-    ///'{n,}': + = {1,}, * = {0,}
-    AtLeast(usize),
-    /// '{,m}' = {0,m}
-    AtMost(usize),
-    /// '{n,m}': ? = {0,1}
-    Interval(usize, usize),
-}
-
-impl Repetition {
-    /// Returns the minimum number of occurrences required for a match.
-    pub fn min(&self) -> usize {
-        match self {
-            Self::Unit => 1,
-            Self::Optional => 0,
-            Self::OneOrMore => 1,
-            Self::ZeroOrMore => 0,
-            Self::NTimes(n) => *n,
-            Self::AtLeast(n) => *n,
-            Self::AtMost(_) => 0,
-            Self::Interval(n, _) => *n,
-        }
-    }
-    /// Returns the maximum number of occurrences allowed for a match, if bounded.
-    pub fn max(&self) -> Option<usize> {
-        match self {
-            Self::Unit => Some(1),
-            Self::Optional => Some(1),
-            Self::OneOrMore => None,
-            Self::ZeroOrMore => None,
-            Self::NTimes(n) => Some(*n),
-            Self::AtLeast(_) => None,
-            Self::AtMost(m) => Some(*m),
-            Self::Interval(_, m) => Some(*m),
-        }
-    }
-    /// Checks if a given count of occurrences satisfies this repetition constraint.
-    pub fn check(&self, count: usize) -> bool {
-        let min = self.min();
-        let max = self.max();
-        count >= min && max.map_or(true, |max| count <= max)
-    }
-}
-
 #[derive(Debug, Clone)]
 /// Represents an expression in the filter DSL.
 ///
@@ -229,11 +160,11 @@ pub enum DeclType {
 /// defining sources, patterns, sequences, and rules.
 pub struct Declaration<'src> {
     /// The name of the declaration
-    pub name: &'src str,
+    pub(crate) name: &'src str,
     /// The type of declaration
-    pub decl_type: DeclType,
+    pub(crate) decl_type: DeclType,
     /// Source span for error reporting
-    pub span: Span,
+    pub(crate) span: Span,
     /// The declaration body (expression)
-    pub body: Spanned<Expr<'src>>,
+    pub(crate) body: Spanned<Expr<'src>>,
 }

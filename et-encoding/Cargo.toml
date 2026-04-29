@@ -9,6 +9,7 @@ repository.workspace = true
 
 [dependencies]
 aetherus-events.workspace = true
+et-core.workspace = true
 anyhow.workspace = true
 env_logger.workspace = true
 itertools.workspace = true

@@ -1,7 +1,51 @@
 //! This module defines the BitsRange and BitsMatch types for encoding and matching specific bit fields in event encodings.
-
+//!
 use anyhow::{Error, Result, anyhow};
 use std::str::FromStr;
+
+/// BitsMatch represents a bitmask and value for matching specific bits in the encoded event. The mask indicates which bits to check, and the value indicates the expected values of those bits.
+#[derive(Clone, PartialEq, Eq, Hash)]
+pub struct BitsMatch {
+    /// Bits mask
+    pub mask: u32,
+    /// Bits value
+    pub value: u32,
+}
+
+impl BitsMatch {
+    /// Checks if the given encoded event matches the BitsMatch criteria by applying the mask and comparing to the value.
+    pub fn check(&self, event_encoded: u32) -> bool {
+        self.mask & event_encoded == self.value
+    }
+}
+
+impl From<aetherus_events::filter::BitsMatch> for BitsMatch {
+    fn from(other: aetherus_events::filter::BitsMatch) -> Self {
+        BitsMatch {
+            mask: other.mask,
+            value: other.value,
+        }
+    }
+}
+
+impl Into<aetherus_events::filter::BitsMatch> for BitsMatch {
+    fn into(self) -> aetherus_events::filter::BitsMatch {
+        aetherus_events::filter::BitsMatch {
+            mask: self.mask,
+            value: self.value,
+        }
+    }
+}
+
+impl std::fmt::Debug for BitsMatch {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "BitsMatch {{ mask: 0x{:x}, value: 0x{:x} }}",
+            self.mask, self.value
+        )
+    }
+}
 
 /// BitsRange represents a range of bits in the encoded event, specified in "end:start" Verilog style (e.g., "31:28" for bits 31 down to 28).
 #[derive(Debug, PartialEq)]
@@ -31,50 +75,13 @@ impl FromStr for BitsRange {
     }
 }
 
-/// BitsMatch represents a bitmask and value for matching specific bits in the encoded event. The mask indicates which bits to check, and the value indicates the expected values of those bits.
-#[derive(Clone, PartialEq, Eq, Hash)]
-pub struct BitsMatch {
-    /// Bits mask
-    pub mask: u32,
-    /// Bits value
-    pub value: u32,
-}
-
-impl BitsMatch {
-    /// Checks if the given encoded event matches the BitsMatch criteria by applying the mask and comparing to the value.
-    pub fn check(&self, event_encoded: u32) -> bool {
-        self.mask & event_encoded == self.value
-    }
-}
-
-impl From<aetherus_events::filter::BitsMatch> for BitsMatch {
-    fn from(other: aetherus_events::filter::BitsMatch) -> Self {
-        BitsMatch { mask: other.mask, value: other.value }
-    }
-}
-
-impl Into<aetherus_events::filter::BitsMatch> for BitsMatch {
-    fn into(self) -> aetherus_events::filter::BitsMatch {
-        aetherus_events::filter::BitsMatch { mask: self.mask, value: self.value }
-    }
-}
-
-impl std::fmt::Debug for BitsMatch {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "BitsMatch {{ mask: 0x{:x}, value: 0x{:x} }}",
-            self.mask, self.value
-        )
-    }
-}
-
 impl BitsMatch {
     /// Parses a string representation of bits (binary, hex, decimal, or don't care) according to the specified BitsRange and returns a BitsMatch
-    pub fn parse(bits_range: &BitsRange, input: &str) -> Result<Self> {
-        let num_bits = bits_range.0 - bits_range.1 + 1;
-        let lsb_pos = bits_range.1;
-        let mask = ((1 << num_bits) - 1) << lsb_pos;
+    pub fn parse(input: &str, range: &BitsRange) -> Result<Self> {
+        let msb = range.0;
+        let lsb = range.1;
+        let num_bits = msb - lsb + 1;
+        let mask = ((1 << num_bits) - 1) << lsb;
         // input can be:
         // - "0b001011" (binary)
         // - "0x2F" (hex)
@@ -96,19 +103,25 @@ impl BitsMatch {
                                 mask = (mask << 1) | 1;
                                 value = (value << 1) | if c == '1' { 1 } else { 0 };
                             }
-                            _ => return Err(anyhow!("Invalid character '{}' in binary literal '{}'", c, s)),
+                            _ => {
+                                return Err(anyhow!(
+                                    "Invalid character '{}' in binary literal '{}'",
+                                    c,
+                                    s
+                                ));
+                            }
                         }
                     }
                     Ok(BitsMatch {
-                        mask: mask << lsb_pos,
-                        value: value << lsb_pos,
+                        mask: mask << lsb,
+                        value: value << lsb,
                     })
                 } else if let Some(rest) = s.strip_prefix("0x") {
                     Ok(BitsMatch {
                         mask,
                         value: u32::from_str_radix(rest, 16)
                             .map_err(|e| anyhow!("Invalid hex value '{}': {}", rest, e))?
-                            << lsb_pos,
+                            << lsb,
                     })
                 } else {
                     Ok(BitsMatch {
@@ -116,7 +129,7 @@ impl BitsMatch {
                         value: s
                             .parse::<u32>()
                             .map_err(|e| anyhow!("Invalid integer value '{}': {}", s, e))?
-                            << lsb_pos,
+                            << lsb,
                     })
                 }
             }
@@ -185,7 +198,7 @@ mod tests {
     #[test]
     fn bits_match_parse_binary() {
         let range = BitsRange(27, 24);
-        let bm = BitsMatch::parse(&range, "0b0011").unwrap();
+        let bm = BitsMatch::parse("0b0011", &range).unwrap();
         assert_eq!(bm.mask, 0x0F000000);
         assert_eq!(bm.value, 0x03000000);
     }
@@ -193,7 +206,7 @@ mod tests {
     #[test]
     fn bits_match_parse_binary_with_x() {
         let range = BitsRange(7, 0);
-        let bm = BitsMatch::parse(&range, "0bxxxxxxx1").unwrap();
+        let bm = BitsMatch::parse("0bxxxxxxx1", &range).unwrap();
         assert_eq!(bm.mask, 0x00000001);
         assert!(bm.check(0x00000001));
         assert!(bm.check(0x00000003));
@@ -203,7 +216,7 @@ mod tests {
     #[test]
     fn bits_match_parse_hex() {
         let range = BitsRange(15, 0);
-        let bm = BitsMatch::parse(&range, "0x002F").unwrap();
+        let bm = BitsMatch::parse("0x002F", &range).unwrap();
         assert_eq!(bm.mask, 0xFFFF);
         assert_eq!(bm.value, 0x002F);
     }
@@ -211,7 +224,7 @@ mod tests {
     #[test]
     fn bits_match_parse_decimal() {
         let range = BitsRange(23, 16);
-        let bm = BitsMatch::parse(&range, "42").unwrap();
+        let bm = BitsMatch::parse("42", &range).unwrap();
         assert_eq!(bm.mask, 0x00FF0000);
         assert_eq!(bm.value, 0x002A0000);
     }
@@ -219,10 +232,10 @@ mod tests {
     #[test]
     fn bits_match_parse_dont_care() {
         let range = BitsRange(31, 28);
-        let bm = BitsMatch::parse(&range, "_").unwrap();
+        let bm = BitsMatch::parse("_", &range).unwrap();
         assert_eq!(bm, BitsMatch { mask: 0, value: 0 });
 
-        let bm2 = BitsMatch::parse(&range, "X").unwrap();
+        let bm2 = BitsMatch::parse("X", &range).unwrap();
         assert_eq!(bm2, BitsMatch { mask: 0, value: 0 });
     }
 

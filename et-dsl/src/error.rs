@@ -12,7 +12,12 @@ use chumsky::span::SimpleSpan;
 /// - `Unspanned` - Error without location (e.g., semantic errors)
 pub enum Error {
     /// Error with source span
-    Spanned { span: SimpleSpan, msg: String },
+    Spanned {
+        /// Source span where the error occurred
+        span: SimpleSpan,
+        /// Error message describing the issue
+        msg: String
+    },
     /// Error without location
     Unspanned(String),
 }

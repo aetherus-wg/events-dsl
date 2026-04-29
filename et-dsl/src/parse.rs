@@ -6,9 +6,10 @@
 use chumsky::{input::ValueInput, prelude::*};
 
 use crate::{
-    ast::{DeclType, Declaration, Expr, Repetition, SrcId},
+    ast::{DeclType, Declaration, Expr, SrcId},
     lexer::Token,
 };
+use et_core::Repetition;
 
 type Span = SimpleSpan;
 

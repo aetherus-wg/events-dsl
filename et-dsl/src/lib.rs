@@ -108,16 +108,16 @@ pub fn extract_ledger_path(
     let mut ledger_path = None;
     for decl in declarations.iter() {
         match decl.body {
-            (Expr::LedgerPath(path), span) => {
+            (Expr::LedgerPath(path), _span) => {
                 if let Some((_, first_span)) = ledger_path {
                     failure(
                         "Multiple ledger/photons paths specified".to_string(),
-                        ("another declaration here".to_string(), span),
+                        ("another declaration here".to_string(), decl.span),
                         [("first declaration here".to_string(), first_span)],
                         script_src,
                     );
                 } else {
-                    ledger_path = Some((script_dirname.join(path), span));
+                    ledger_path = Some((script_dirname.join(path), decl.span));
                 }
             }
             _ => (),
@@ -155,16 +155,16 @@ pub fn extract_signals_path(
     let mut signals_path = None;
     for decl in declarations.iter() {
         match decl.body {
-            (Expr::SignalsPath(path), span) => {
+            (Expr::SignalsPath(path), _span) => {
                 if let Some((_, first_span)) = signals_path {
                     failure(
                         "Multiple signals paths specified".to_string(),
-                        ("another declaration here".to_string(), span),
+                        ("another declaration here".to_string(), decl.span),
                         [("first declaration here".to_string(), first_span)],
                         script_src,
                     );
                 } else {
-                    signals_path = Some((script_dirname.join(path), span));
+                    signals_path = Some((script_dirname.join(path), decl.span));
                 }
             }
             _ => (),

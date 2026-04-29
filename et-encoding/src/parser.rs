@@ -1,9 +1,9 @@
 //! This module provides functionality to parse encoding definitions from markdown tables.
 
-use crate::bits::{BitsMatch, BitsRange};
 use crate::trie::{Encoding, Field};
 use anyhow::anyhow;
 use anyhow::{Context, Result};
+use et_core::bits::{BitsMatch, BitsRange};
 use itertools::Itertools;
 use markdown_ppp::ast::Block;
 use markdown_ppp::ast::Inline;
@@ -44,7 +44,7 @@ pub fn parse_encodings(src: &str) -> Result<Vec<Encoding>> {
                     .zip(fields_md.iter().zip(encodings_md.iter()))
                 {
                     let field_str = unwrap_inline(&field_md[0])?;
-                    let encoding = BitsMatch::parse(&bit_range, &unwrap_inline(&encoding_md[0])?)
+                    let encoding = BitsMatch::parse(&unwrap_inline(&encoding_md[0])?, &bit_range)
                         .context("Failed to parse bits match")?;
                     if field_str.starts_with('_') && field_str.len() > 1 {
                         specified = false;

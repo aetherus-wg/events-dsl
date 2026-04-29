@@ -1,3 +1,5 @@
+//! This binary demonstrates how to read encoding schemes from a file, build a Trie decoder, emit the DOT file to visualiset the Trie, and perform pattern matching on the Trie.
+
 use anyhow::{Result};
 use et_encoding::SrcId;
 use et_encoding::parser::{parse_encodings, resolved_dir_encodings};
@@ -45,7 +47,7 @@ fn main() -> Result<()> {
         pattern::Field::SrcId(SrcId::MatId),
     ]);
 
-    let (bits_match, src_id) = pattern::search_trie(&trie.root, &pattern)?;
+    let (bits_match, src_id) = pattern::search_trie(&trie, &pattern)?;
 
     println!("Bits match for pattern {:?}: {:?} with {}", pattern, bits_match, src_id);
 
