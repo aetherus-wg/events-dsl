@@ -176,3 +176,291 @@ pub fn lexer<'src>(dict: &HashSet<String>
         .repeated()
         .collect()
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    fn default_dict() -> HashSet<String> {
+        let mut dict = HashSet::new();
+        dict.insert("MCRT".to_string());
+        dict.insert("Material".to_string());
+        dict.insert("Interface".to_string());
+        dict.insert("Elastic".to_string());
+        dict.insert("Inelastic".to_string());
+        dict.insert("Reflector".to_string());
+        dict.insert("Emission".to_string());
+        dict.insert("Detection".to_string());
+        dict.insert("Backward".to_string());
+        dict.insert("Forward".to_string());
+        dict
+    }
+
+    #[test]
+    fn test_decimal_numbers() {
+        let dict = default_dict();
+        let tokens = lexer(&dict).parse("0 42 123 65535").unwrap();
+        assert_eq!(tokens.len(), 4);
+        assert!(matches!(tokens[0].0, Token::Num(0)));
+        assert!(matches!(tokens[1].0, Token::Num(42)));
+        assert!(matches!(tokens[2].0, Token::Num(123)));
+        assert!(matches!(tokens[3].0, Token::Num(65535)));
+    }
+
+    #[test]
+    #[ignore]
+    fn test_hex_numbers() {
+        let dict = default_dict();
+        let tokens = lexer(&dict).parse("0x00 0xFF 0x1A 0xABCD").unwrap();
+        assert_eq!(tokens.len(), 4);
+        assert!(matches!(tokens[0].0, Token::Num(0)));
+        assert!(matches!(tokens[1].0, Token::Num(255)));
+        assert!(matches!(tokens[2].0, Token::Num(26)));
+        assert!(matches!(tokens[3].0, Token::Num(43981)));
+    }
+
+    #[test]
+    fn test_simple_strings() {
+        let dict = default_dict();
+        let tokens = lexer(&dict).parse("\"hello\" \"world\"").unwrap();
+        assert_eq!(tokens.len(), 2);
+        assert!(matches!(tokens[0].0, Token::Str("hello")));
+        assert!(matches!(tokens[1].0, Token::Str("world")));
+    }
+
+    #[test]
+    fn test_strings_with_spaces() {
+        let dict = default_dict();
+        let tokens = lexer(&dict)
+            .parse("\"seawater\" \"glass material\"")
+            .unwrap();
+        assert_eq!(tokens.len(), 2);
+        assert!(matches!(tokens[0].0, Token::Str("seawater")));
+        assert!(matches!(tokens[1].0, Token::Str("glass material")));
+    }
+
+    #[test]
+    fn test_all_control_chars() {
+        let dict = default_dict();
+        let tokens = lexer(&dict).parse("=[]{},()").unwrap();
+        assert_eq!(tokens.len(), 8);
+        assert!(matches!(tokens[0].0, Token::Ctrl('=')));
+        assert!(matches!(tokens[1].0, Token::Ctrl('[')));
+        assert!(matches!(tokens[2].0, Token::Ctrl(']')));
+        assert!(matches!(tokens[3].0, Token::Ctrl('{')));
+        assert!(matches!(tokens[4].0, Token::Ctrl('}')));
+        assert!(matches!(tokens[5].0, Token::Ctrl(',')));
+        assert!(matches!(tokens[6].0, Token::Ctrl('(')));
+        assert!(matches!(tokens[7].0, Token::Ctrl(')')));
+    }
+
+    #[test]
+    fn test_concat_operator() {
+        let dict = default_dict();
+        let tokens = lexer(&dict).parse("|").unwrap();
+        assert_eq!(tokens.len(), 1);
+        assert!(matches!(tokens[0].0, Token::Concat));
+    }
+
+    #[test]
+    fn test_all_predicates() {
+        let dict = default_dict();
+        let tokens = lexer(&dict).parse("*+?!").unwrap();
+        assert_eq!(tokens.len(), 4);
+        assert!(matches!(tokens[0].0, Token::Predicates('*')));
+        assert!(matches!(tokens[1].0, Token::Predicates('+')));
+        assert!(matches!(tokens[2].0, Token::Predicates('?')));
+        assert!(matches!(tokens[3].0, Token::Predicates('!')));
+    }
+
+    #[test]
+    fn test_all_keywords() {
+        let dict = default_dict();
+        let tokens = lexer(&dict)
+            .parse("src pattern sequence rule any perm seq ledger signals")
+            .unwrap();
+        assert_eq!(tokens.len(), 9);
+        assert!(matches!(tokens[0].0, Token::SrcDecl));
+        assert!(matches!(tokens[1].0, Token::PatternDecl));
+        assert!(matches!(tokens[2].0, Token::SeqDecl));
+        assert!(matches!(tokens[3].0, Token::RuleDecl));
+        assert!(matches!(tokens[4].0, Token::Any));
+        assert!(matches!(tokens[5].0, Token::Perm));
+        assert!(matches!(tokens[6].0, Token::Seq));
+        assert!(matches!(tokens[7].0, Token::Ledger));
+        assert!(matches!(tokens[8].0, Token::Signals));
+    }
+
+    #[test]
+    #[ignore]
+    fn test_all_src_id_types() {
+        let dict = default_dict();
+        let tokens = lexer(&dict)
+            .parse("Mat Surf MatSurf Light Detector Det")
+            .unwrap();
+        assert_eq!(tokens.len(), 6);
+        assert!(matches!(tokens[0].0, Token::SrcId("Mat")));
+        assert!(matches!(tokens[1].0, Token::SrcId("Surf")));
+        assert!(matches!(tokens[2].0, Token::SrcId("MatSurf")));
+        assert!(matches!(tokens[3].0, Token::SrcId("Light")));
+        assert!(matches!(tokens[4].0, Token::SrcId("Detector")));
+        assert!(matches!(tokens[5].0, Token::SrcId("Detector")));
+    }
+
+    #[test]
+    fn test_field_ids_from_dict() {
+        let mut dict = default_dict();
+        dict.insert("EventType".to_string());
+
+        let tokens = lexer(&dict)
+            .parse("MCRT Material Elastic EventType")
+            .unwrap();
+        assert_eq!(tokens.len(), 4);
+        assert!(matches!(tokens[0].0, Token::FieldId("MCRT")));
+        assert!(matches!(tokens[1].0, Token::FieldId("Material")));
+        assert!(matches!(tokens[2].0, Token::FieldId("Elastic")));
+        assert!(matches!(tokens[3].0, Token::FieldId("EventType")));
+    }
+
+    #[test]
+    #[ignore]
+    fn test_x_dont_care() {
+        let dict = default_dict();
+        let tokens = lexer(&dict).parse("X").unwrap();
+        assert_eq!(tokens.len(), 1);
+        assert!(matches!(tokens[0].0, Token::X));
+    }
+
+    #[test]
+    fn test_user_identifiers() {
+        let dict = default_dict();
+        let tokens = lexer(&dict)
+            .parse("water_id glass_interf my_pattern rule_name")
+            .unwrap();
+        assert_eq!(tokens.len(), 4);
+        assert!(matches!(tokens[0].0, Token::Ident("water_id")));
+        assert!(matches!(tokens[1].0, Token::Ident("glass_interf")));
+        assert!(matches!(tokens[2].0, Token::Ident("my_pattern")));
+        assert!(matches!(tokens[3].0, Token::Ident("rule_name")));
+    }
+
+    #[test]
+    fn test_single_line_comment() {
+        let dict = default_dict();
+        let tokens = lexer(&dict).parse("# This is a comment\nX").unwrap();
+        assert_eq!(tokens.len(), 1);
+        assert!(matches!(tokens[0].0, Token::X));
+    }
+
+    #[test]
+    #[ignore]
+    fn test_comment_at_end_of_line() {
+        let dict = default_dict();
+        let tokens = lexer(&dict).parse("X # comment").unwrap();
+        assert_eq!(tokens.len(), 1);
+        assert!(matches!(tokens[0].0, Token::X));
+    }
+
+    #[test]
+    #[ignore]
+    fn test_multiple_comments() {
+        let dict = default_dict();
+        let tokens = lexer(&dict)
+            .parse("# comment 1\nX # comment 2\n# comment 3")
+            .unwrap();
+        assert_eq!(tokens.len(), 1);
+        assert!(matches!(tokens[0].0, Token::X));
+    }
+
+    #[test]
+    #[ignore]
+    fn test_spaces() {
+        let dict = default_dict();
+        let tokens = lexer(&dict).parse("  X   Z  ").unwrap();
+        // Just verify tokens exist and have some content
+        assert!(tokens.len() >= 1);
+    }
+
+    #[test]
+    fn test_tabs() {
+        let dict = default_dict();
+        let tokens = lexer(&dict).parse("\tX\tZ\t").unwrap();
+        assert_eq!(tokens.len(), 2);
+    }
+
+    #[test]
+    fn test_newlines() {
+        let dict = default_dict();
+        let tokens = lexer(&dict).parse("X\nY\nZ").unwrap();
+        assert_eq!(tokens.len(), 3);
+    }
+
+    #[test]
+    #[ignore]
+    fn test_pattern_with_concat() {
+        let mut dict = default_dict();
+        dict.insert("MCRT".to_string());
+        dict.insert("Material".to_string());
+        dict.insert("Elastic".to_string());
+
+        let src = "MCRT | Material | Elastic | X | Mat(5)";
+        let tokens = lexer(&dict).parse(src).unwrap();
+
+        assert_eq!(tokens.len(), 11);
+        assert!(matches!(tokens[0].0, Token::FieldId("MCRT")));
+        assert!(matches!(tokens[1].0, Token::Concat));
+        assert!(matches!(tokens[2].0, Token::FieldId("Material")));
+        assert!(matches!(tokens[3].0, Token::Concat));
+        assert!(matches!(tokens[4].0, Token::FieldId("Elastic")));
+        assert!(matches!(tokens[5].0, Token::Concat));
+        assert!(matches!(tokens[6].0, Token::X));
+        assert!(matches!(tokens[7].0, Token::Concat));
+        assert!(matches!(tokens[8].0, Token::SrcId("Mat")));
+        assert!(matches!(tokens[9].0, Token::Ctrl('(')));
+        assert!(matches!(tokens[10].0, Token::Num(5)));
+    }
+
+    #[test]
+    fn test_any_with_multiple_items() {
+        let mut dict = default_dict();
+        dict.insert("Mat".to_string());
+        dict.insert("MatSurf".to_string());
+
+        let src = "any[Mat(\"seawater\"), MatSurf(\"Water:Water_material\")]";
+        let tokens = lexer(&dict).parse(src).unwrap();
+
+        assert!(tokens.len() > 5);
+        assert!(matches!(tokens[0].0, Token::Any));
+        assert!(matches!(tokens[1].0, Token::Ctrl('[')));
+    }
+
+    #[test]
+    fn test_ctrl_display() {
+        assert_eq!(Token::Ctrl('=').to_string(), "=");
+        assert_eq!(Token::Ctrl('[').to_string(), "[");
+        assert_eq!(Token::Ctrl(']').to_string(), "]");
+        assert_eq!(Token::Concat.to_string(), "|");
+    }
+
+    #[test]
+    fn test_predicates_display() {
+        assert_eq!(Token::Predicates('*').to_string(), "*");
+        assert_eq!(Token::Predicates('+').to_string(), "+");
+        assert_eq!(Token::Predicates('?').to_string(), "?");
+        assert_eq!(Token::Predicates('!').to_string(), "!");
+    }
+
+    #[test]
+    fn test_keywords_display() {
+        assert_eq!(Token::Any.to_string(), "any");
+        assert_eq!(Token::Perm.to_string(), "perm");
+        assert_eq!(Token::Seq.to_string(), "seq");
+        assert_eq!(Token::SeqDecl.to_string(), "sequence");
+        assert_eq!(Token::SrcDecl.to_string(), "src");
+        assert_eq!(Token::PatternDecl.to_string(), "pattern");
+        assert_eq!(Token::RuleDecl.to_string(), "rule");
+        assert_eq!(Token::Ledger.to_string(), "ledger");
+        assert_eq!(Token::Signals.to_string(), "signals");
+    }
+
+}

@@ -9,8 +9,8 @@
 use std::collections::HashMap;
 
 use aetherus_events::{SrcId as DomainSrcId, ledger::SrcName};
+use et_core::{Repetition, bits::BitsMatch};
 use et_encoding::{
-    bits::BitsMatch,
     pattern::{self, Pattern},
     trie::Trie,
 };
@@ -18,7 +18,7 @@ use log::debug;
 
 use crate::Check;
 use crate::{
-    ast::{DeclType, Declaration, Expr, Repetition, SrcId},
+    ast::{DeclType, Declaration, Expr, SrcId},
     error::Error,
     failure,
 };
@@ -103,14 +103,6 @@ impl Check<u32> for Match {
             Match::And(left, right) => left.check(event_encoded) && right.check(event_encoded),
             Match::Any(matches) => matches.iter().any(|m| m.check(event_encoded)),
         }
-    }
-}
-
-impl Check<&[u32]> for Match {
-    fn check(&self, events_chain: &[u32]) -> bool {
-        events_chain
-            .iter()
-            .all(|event_encoded| self.check(*event_encoded))
     }
 }
 
@@ -638,4 +630,237 @@ impl<'src> Expr<'src> {
             _ => return Err(Error::Unspanned(format!("Unexpected expression type for resolving rule: {:?}", self))),
         })
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use et_core::bits::BitsMatch;
+
+    // Tests for the Match enum and its check method
+    #[test]
+    fn test_match_x_always_passes() {
+        let m = Match::X;
+        assert!(m.check(0));
+        assert!(m.check(u32::MAX));
+        assert!(m.check(0xDEADBEEF));
+    }
+
+    #[test]
+    fn test_match_bits_exact_value() {
+        let bm = BitsMatch {
+            mask: 0xFFFF,
+            value: 0x1234,
+        };
+        let m = Match::Bits(bm);
+
+        assert!(m.check(0x00001234));
+        assert!(m.check(0xFFFF1234));
+        assert!(!m.check(0x00001235));
+        assert!(!m.check(0x00001230));
+    }
+
+    #[test]
+    fn test_match_not() {
+        let bm = BitsMatch {
+            mask: 0xFF,
+            value: 0x42,
+        };
+        let m = Match::Not(Box::new(Match::Bits(bm)));
+
+        assert!(!m.check(0x00000042));
+        assert!(!m.check(0xFFFFFF42));
+        assert!(m.check(0x00000000));
+        assert!(m.check(0x00000001));
+    }
+
+    #[test]
+    fn test_match_and_both_required() {
+        let bm1 = BitsMatch {
+            mask: 0xFF,
+            value: 0x42,
+        };
+        let bm2 = BitsMatch {
+            mask: 0xFF00,
+            value: 0xAA00,
+        };
+        let m = Match::And(Box::new(Match::Bits(bm1)), Box::new(Match::Bits(bm2)));
+
+        assert!(m.check(0x0000AA42));
+        assert!(!m.check(0x00004200));
+        assert!(!m.check(0x0000AA00));
+        assert!(!m.check(0x00000042));
+    }
+
+    #[test]
+    fn test_match_any_passes() {
+        let bm1 = BitsMatch {
+            mask: 0xFF,
+            value: 0x42,
+        };
+        let bm2 = BitsMatch {
+            mask: 0xFF,
+            value: 0xAA,
+        };
+        let m = Match::Any(vec![Match::Bits(bm1), Match::Bits(bm2)]);
+
+        assert!(m.check(0x00000042));
+        assert!(m.check(0x000000AA));
+        assert!(!m.check(0x00000000));
+    }
+
+    #[test]
+    fn test_match_optimise_to_x() {
+        let bm = BitsMatch {
+            mask: 0xFF,
+            value: 0x42,
+        };
+        let m = Match::Any(vec![Match::X, Match::Bits(bm)]);
+        let optimised = m.optimise();
+
+        assert!(matches!(optimised, Match::X));
+    }
+
+    #[test]
+    fn test_match_optimise_removes_redundant_x() {
+        let bm = BitsMatch {
+            mask: 0xFF,
+            value: 0x42,
+        };
+        let m = Match::And(Box::new(Match::X), Box::new(Match::Bits(bm.clone())));
+        let optimised = m.optimise();
+
+        assert_eq!(optimised, Match::Bits(bm));
+    }
+
+    #[test]
+    fn test_match_optimise_flattens_nested_any() {
+        let inner = Match::Any(vec![
+            BitsMatch {
+                mask: 0xFF,
+                value: 0x42,
+            }
+            .into(),
+            BitsMatch {
+                mask: 0xFF,
+                value: 0xAA,
+            }
+            .into(),
+        ]);
+        let m = Match::Any(vec![
+            inner,
+            BitsMatch {
+                mask: 0xFF00,
+                value: 0xBB00,
+            }
+            .into(),
+        ]);
+        let optimised = m.optimise();
+
+        assert!(matches!(optimised, Match::Any(_)));
+        if let Match::Any(inner_vec) = optimised {
+            assert_eq!(inner_vec.len(), 3);
+        } else {
+            panic!("Expected Any after optimisation");
+        }
+    }
+
+
+    // Test SeqTree optimisations
+    #[test]
+    fn test_seqtree_optimise_flatten_nested_seq() {
+        let bm1 = BitsMatch {
+            mask: 0xFF,
+            value: 0x42,
+        };
+        let bm2 = BitsMatch {
+            mask: 0xFF00,
+            value: 0xAA00,
+        };
+        let tree = SeqTree::Seq(vec![
+            SeqTree::Pattern(Predicate::Unit, Match::Bits(bm1)),
+            SeqTree::Seq(vec![SeqTree::Pattern(Predicate::Unit, Match::Bits(bm2.clone()))]),
+        ]);
+
+        let optimised = tree.optimise();
+
+        if let SeqTree::Seq(items) = optimised {
+            assert_eq!(items.len(), 2);
+            assert!(matches!(items[1], SeqTree::Pattern(Predicate::Unit, Match::Bits(_))));
+        } else {
+            panic!("Expected Seq after optimisation");
+        }
+    }
+
+    // -------------------------------------------------------
+    // Test resolve methods
+    // -------------------------------------------------------
+    #[test]
+    fn test_src_id_resolve() {
+        let mut src_dict = HashMap::new();
+        src_dict.insert(SrcName::Mat("seawater".to_string()), DomainSrcId::Mat(5));
+
+        assert_eq!(
+            SrcId::Mat(5).resolve(&src_dict).unwrap(),
+            DomainSrcId::Mat(5)
+        );
+        assert_eq!(
+            SrcId::MatName("seawater").resolve(&src_dict).unwrap(),
+            DomainSrcId::Mat(5)
+        );
+        assert!(SrcId::MatName("unknown").resolve(&src_dict).is_err());
+    }
+
+    #[test]
+    fn test_resolve_mat_id() {
+        let src_id = SrcId::Mat(5);
+        let dict = make_test_src_dict();
+
+        let resolved = src_id.resolve(&dict).unwrap();
+        assert_eq!(resolved, DomainSrcId::Mat(5));
+    }
+
+    #[test]
+    fn test_resolve_mat_name() {
+        let src_id = SrcId::MatName("seawater");
+        let dict = make_test_src_dict();
+
+        let resolved = src_id.resolve(&dict).unwrap();
+        assert_eq!(resolved, DomainSrcId::Mat(5));
+    }
+
+    #[test]
+    fn test_seqtree_optimise_single_element_becomes_pattern() {
+        let bm = BitsMatch {
+            mask: 0xFF,
+            value: 0x42,
+        };
+        let tree = SeqTree::Seq(vec![SeqTree::Pattern(Predicate::Unit, Match::Bits(bm))]);
+
+        let optimised = tree.optimise();
+
+        assert!(matches!(optimised, SeqTree::Pattern(_, _)));
+    }
+
+    fn make_test_src_dict() -> HashMap<SrcName, DomainSrcId> {
+        let mut dict = HashMap::new();
+        dict.insert(SrcName::Mat("seawater".to_string()), DomainSrcId::Mat(5));
+        dict.insert(SrcName::Mat("glass".to_string()), DomainSrcId::Mat(3));
+        dict.insert(SrcName::Mat("air".to_string()), DomainSrcId::Mat(0));
+        dict.insert(
+            SrcName::Surf("TargetToy".to_string()),
+            DomainSrcId::Surf(12),
+        );
+        dict.insert(
+            SrcName::Surf("TargetTube".to_string()),
+            DomainSrcId::Surf(15),
+        );
+        dict.insert(
+            SrcName::MatSurf("Water:Water_material".to_string()),
+            DomainSrcId::MatSurf(7),
+        );
+        dict.insert(SrcName::Light("laser".to_string()), DomainSrcId::Light(0));
+        dict
+    }
+
 }

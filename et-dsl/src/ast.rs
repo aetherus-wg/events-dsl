@@ -134,10 +134,10 @@ pub(crate) enum Expr<'src> {
     SrcId(SrcId<'src>),
 }
 
-#[derive(Debug)]
 /// The type of a declaration.
 ///
 /// Indicates what kind of declaration a [`Declaration`] contains.
+#[derive(Debug, PartialEq)]
 pub enum DeclType {
     /// SrcId declaration to match values described
     SrcId,
@@ -160,11 +160,127 @@ pub enum DeclType {
 /// defining sources, patterns, sequences, and rules.
 pub struct Declaration<'src> {
     /// The name of the declaration
-    pub(crate) name: &'src str,
+    pub name: &'src str,
     /// The type of declaration
-    pub(crate) decl_type: DeclType,
+    pub decl_type: DeclType,
     /// Source span for error reporting
-    pub(crate) span: Span,
+    pub span: Span,
     /// The declaration body (expression)
     pub(crate) body: Spanned<Expr<'src>>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashSet;
+    fn default_dict() -> HashSet<String> {
+        let mut dict = HashSet::new();
+        dict.insert("MCRT".to_string());
+        dict.insert("Material".to_string());
+        dict.insert("Interface".to_string());
+        dict.insert("Elastic".to_string());
+        dict.insert("Inelastic".to_string());
+        dict.insert("Reflector".to_string());
+        dict.insert("Emission".to_string());
+        dict.insert("Detection".to_string());
+        dict.insert("Backward".to_string());
+        dict.insert("Forward".to_string());
+        dict.insert("X".to_string());
+        dict
+    }
+
+    #[test]
+    fn test_src_id_to_encoding_id() {
+        assert!(matches!(
+            SrcId::Mat(5).into(),
+            et_encoding::SrcId::MatId
+        ));
+        assert!(matches!(
+            SrcId::MatName("test").into(),
+            et_encoding::SrcId::MatId
+        ));
+        assert!(matches!(
+            SrcId::Surf(3).into(),
+            et_encoding::SrcId::SurfId
+        ));
+        assert!(matches!(
+            SrcId::SurfName("test").into(),
+            et_encoding::SrcId::SurfId
+        ));
+        assert!(matches!(
+            SrcId::MatSurf(1).into(),
+            et_encoding::SrcId::MatSurfId
+        ));
+        assert!(matches!(
+            SrcId::MatSurfName("test").into(),
+            et_encoding::SrcId::MatSurfId
+        ));
+        assert!(matches!(
+            SrcId::Light(0).into(),
+            et_encoding::SrcId::LightId
+        ));
+        assert!(matches!(
+            SrcId::LightName("laser").into(),
+            et_encoding::SrcId::LightId
+        ));
+        assert!(matches!(
+            SrcId::Detector(0).into(),
+            et_encoding::SrcId::DetectorId
+        ));
+        assert!(matches!(
+            SrcId::DetectorName("sensor").into(),
+            et_encoding::SrcId::DetectorId
+        ));
+    }
+
+    #[test]
+    fn test_src_id_parse_id() {
+        assert!(matches!(SrcId::parse_id("Mat", 5).unwrap(), SrcId::Mat(5)));
+        assert!(matches!(
+            SrcId::parse_id("Surf", 10).unwrap(),
+            SrcId::Surf(10)
+        ));
+        assert!(matches!(
+            SrcId::parse_id("MatSurf", 3).unwrap(),
+            SrcId::MatSurf(3)
+        ));
+        assert!(matches!(
+            SrcId::parse_id("Light", 1).unwrap(),
+            SrcId::Light(1)
+        ));
+        assert!(matches!(
+            SrcId::parse_id("Detector", 0).unwrap(),
+            SrcId::Detector(0)
+        ));
+        assert!(matches!(
+            SrcId::parse_id("Det", 2).unwrap(),
+            SrcId::Detector(2)
+        ));
+        assert!(SrcId::parse_id("Invalid", 5).is_err());
+    }
+
+    #[test]
+    fn test_src_id_parse_name() {
+        assert!(matches!(
+            SrcId::parse_name("Mat", "seawater").unwrap(),
+            SrcId::MatName("seawater")
+        ));
+        assert!(matches!(
+            SrcId::parse_name("Surf", "TargetToy").unwrap(),
+            SrcId::SurfName("TargetToy")
+        ));
+        assert!(matches!(
+            SrcId::parse_name("MatSurf", "Water:Water_material").unwrap(),
+            SrcId::MatSurfName("Water:Water_material")
+        ));
+        assert!(matches!(
+            SrcId::parse_name("Light", "laser").unwrap(),
+            SrcId::LightName("laser")
+        ));
+        assert!(matches!(
+            SrcId::parse_name("Detector", "sensor").unwrap(),
+            SrcId::DetectorName("sensor")
+        ));
+        assert!(SrcId::parse_name("Invalid", "name").is_err());
+    }
 }
