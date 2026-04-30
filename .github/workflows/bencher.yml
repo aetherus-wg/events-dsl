@@ -26,7 +26,7 @@ jobs:
         run: |
           bencher run \
           --project $(echo "${{ github.repository }}" | sed 's/\//-/g') \
-          --branch "$GITHUB_HEAD_REF" \
+          --branch "$GITHUB_REF_NAME" \
           --start-point "$GITHUB_BASE_REF" \
           --start-point-reset \
           --testbed ubuntu-latest \
@@ -35,6 +35,5 @@ jobs:
           --threshold-max-sample-size 64 \
           --threshold-upper-boundary 0.99 \
           --threshold-reset \
-          --github-actions "${{ secrets.GITHUB_TOKEN }}" \
+          --github-actions '${{ secrets.GITHUB_TOKEN }}' \
           "cargo bench"
-          #--adapter rust_criterion\
