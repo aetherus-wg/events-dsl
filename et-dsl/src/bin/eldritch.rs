@@ -23,6 +23,9 @@ struct Args {
     /// Path to the encoding scheme file
     #[arg(short, long)]
     encoding: String,
+    /// Write `.dot` graphviz to visualise encoding Trie
+    #[arg(long, default_value_t = false)]
+    emit_trie: bool,
     /// Optional path to the ledger file (overrides script declaration)
     #[arg(short, long)]
     ledger: Option<String>,
@@ -49,6 +52,11 @@ fn main() -> Result<()> {
         .format_timestamp(None)
         .init();
 
+    if let Some(output_dir) = &args.output_dir {
+        std::fs::create_dir_all(Path::new(output_dir))
+            .context("Failed to create output directory")?;
+    }
+
     let encoding_filename = args.encoding;
     let encoding_filepath = Path::new(&encoding_filename);
     let encoding_src =
@@ -61,6 +69,31 @@ fn main() -> Result<()> {
     // 1. Build the decoder Trie from the encoding scheme
     let trie = et_encoding::build_decoder(encoding_src)
         .context("Failed to build decoder from encoding scheme")?;
+
+    if args.emit_trie {
+        let dot_file = if let Some(output_dir) = &args.output_dir {
+            Path::new(output_dir).join(format!(
+                "{}_trie.dot",
+                encoding_filepath.file_stem().unwrap().to_str().unwrap()
+            ))
+        } else {
+            encoding_filepath
+                .parent()
+                .unwrap_or_else(|| {
+                    panic!(
+                        "Failed to get parent directory of encoding path: {:?}",
+                        encoding_filepath
+                    )
+                })
+                .join(format!(
+                    "{}_trie.dot",
+                    encoding_filepath.file_stem().unwrap().to_str().unwrap()
+                ))
+        };
+        let graphviz_dot = trie.emit_dot();
+        std::fs::write(&dot_file, graphviz_dot).context("Failed to write DOT file")?;
+        info!("Emitted Trie DOT file: {:?}", dot_file);
+    };
 
     // 2. Extract the field dictionary from the Trie for use in parsing the script
     let dict = trie.get_fields();
@@ -129,18 +162,18 @@ fn main() -> Result<()> {
         let mut uid_hist = HashMap::new();
         let signals = read_csv(&signals_path).context("Failed to read signals file")?;
         for signal in signals {
-            *uid_hist.entry(signal.uid).or_insert(0) += 1;
+            *uid_hist.entry(signal.uid).or_insert(0 as usize) += 1;
         }
         // Get top most common UIDs
-        let mut uid_hist_vec: Vec<_> = uid_hist.iter().collect();
-        uid_hist_vec.sort_by_key(|&(_uid, count)| *count);
+        let mut uid_hist_vec: Vec<_> = uid_hist.into_iter().collect();
+        uid_hist_vec.sort_by_key(|(_uid, count)| *count);
 
         let uids_top = uid_hist_vec
-            .iter()
+            .into_iter()
             .rev()
             .take(args.top)
-            .map(|(uid, _count)| Uid::decode(**uid))
-            .collect::<Vec<_>>();
+            .map(|(uid, count)| (Uid::decode(uid), count))
+            .collect::<HashMap<_, _>>();
         if args.top < 50 {
             info!(
                 "Top {} most common UIDs in signals: {:#?}",
@@ -151,7 +184,7 @@ fn main() -> Result<()> {
             "{}_top.dot",
             script_filepath.file_stem().unwrap().to_str().unwrap()
         ));
-        let graphviz_dot = ledger.emit_dot(&uids_top);
+        let graphviz_dot = ledger.emit_dot_with_freq(uids_top.keys(), &uids_top);
         std::fs::write(&dot_file, graphviz_dot).context("Failed to write DOT file")?;
     }
 
