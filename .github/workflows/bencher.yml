@@ -6,6 +6,10 @@ on:
       - 'main'
       - 'develop'
       - 'feature**'
+    paths:
+     - '**/*.rs'
+     - '**/Cargo.toml'
+     - 'benches/**'
   pull_request:
       types: [opened, reopened, edited, synchronize]
 
