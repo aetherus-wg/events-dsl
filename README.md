@@ -143,6 +143,9 @@ sequence.
 
 ## TODO
 
+- Wanted features:
+  - [ ] Predicated sequence, useful for X with condition. I.e. `* seq[!
+  undesired_pattern, X]` 
 - [ ] Benchmarks with [bencher](https://bencher.dev) for [Statistical Continuous
   Benchmarking](https://bencher.dev/docs/how-to/track-benchmarks/#statistical-continuous-benchmarking)
   - [ ] Criterion benchmarking of a the translucent plate example
