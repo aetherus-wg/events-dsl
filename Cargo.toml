@@ -5,6 +5,7 @@ members = [
   "et-dsl",
   "et-sys",
   "et-python",
+  "benches",
 ]
 resolver = "3"
 

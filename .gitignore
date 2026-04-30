@@ -2,3 +2,4 @@
 **/target
 **/Cargo.lock
 **/*.dot
+/benches/data/simulation_ledger.json
