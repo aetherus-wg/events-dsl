@@ -27,13 +27,11 @@ jobs:
           bencher run \
           --project $(echo "${{ github.repository }}" | sed 's/\//-/g') \
           --branch "$GITHUB_REF_NAME" \
-          --start-point "$GITHUB_BASE_REF" \
-          --start-point-reset \
           --testbed ubuntu-latest \
           --threshold-measure latency \
           --threshold-test t_test \
           --threshold-max-sample-size 64 \
           --threshold-upper-boundary 0.99 \
-          --threshold-reset \
+          --thresholds-reset \
           --github-actions '${{ secrets.GITHUB_TOKEN }}' \
-          "cargo bench"
+          cargo bench
