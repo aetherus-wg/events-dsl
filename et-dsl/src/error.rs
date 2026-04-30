@@ -16,7 +16,7 @@ pub enum Error {
         /// Source span where the error occurred
         span: SimpleSpan,
         /// Error message describing the issue
-        msg: String
+        msg: String,
     },
     /// Error without location
     Unspanned(String),

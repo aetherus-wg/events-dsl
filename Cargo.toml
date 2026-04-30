@@ -21,6 +21,7 @@ repository = "https://github.com/aetherus-wg/eldritch-trace"
 [workspace.dependencies]
 et-encoding = { path = "et-encoding", version = "^0.6.0" }
 et-core = { path = "et-core", version = "^0.6.0" }
+et-dsl = { path = "et-dsl", version = "^0.6.0" }
 
 aetherus-events = { git = "https://github.com/aetherus-wg/aetherus-events", version = "^0.1.8" }
 ariadne = "0.6.0"

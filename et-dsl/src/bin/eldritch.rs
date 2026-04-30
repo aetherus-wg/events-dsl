@@ -6,8 +6,8 @@ use aetherus_events::{
 };
 use anyhow::{Context, Result};
 use clap::Parser;
-use et_dsl::{extract_ledger_path, extract_signals_path, model::resolve_ast, parse_script};
 use env_logger::Env;
+use et_dsl::{extract_ledger_path, extract_signals_path, model::resolve_ast, parse_script};
 use std::{
     collections::HashMap,
     fs,
@@ -122,7 +122,10 @@ fn main() -> Result<()> {
     if let Some(ref signals_path) = signals_path
         && (args.top > 0)
     {
-        info!("Ranking top {} most common UIDs in signals file: {:?}", args.top, signals_path);
+        info!(
+            "Ranking top {} most common UIDs in signals file: {:?}",
+            args.top, signals_path
+        );
         let mut uid_hist = HashMap::new();
         let signals = read_csv(&signals_path).context("Failed to read signals file")?;
         for signal in signals {

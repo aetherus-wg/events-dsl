@@ -16,7 +16,7 @@
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Repetition {
     /// Exactly once
-    Unit,                   // '' Pass-through, no repetition = {1,1}
+    Unit, // '' Pass-through, no repetition = {1,1}
     /// '?' = {0,1}
     Optional,
     /// '+' = {1,}
@@ -120,9 +120,9 @@ mod tests {
         assert_eq!(rep.min(), n);
         assert_eq!(rep.max(), Some(n));
         assert!(!rep.check(0));
-        assert!(!rep.check(n-1));
+        assert!(!rep.check(n - 1));
         assert!(rep.check(n));
-        assert!(!rep.check(n+1));
+        assert!(!rep.check(n + 1));
     }
 
     #[test]
@@ -132,9 +132,9 @@ mod tests {
         assert_eq!(rep.min(), n);
         assert_eq!(rep.max(), None);
         assert!(!rep.check(0));
-        assert!(!rep.check(n-1));
+        assert!(!rep.check(n - 1));
         assert!(rep.check(n));
-        assert!(rep.check(n+100));
+        assert!(rep.check(n + 100));
     }
 
     #[test]
@@ -146,7 +146,7 @@ mod tests {
         assert!(rep.check(0));
         assert!(rep.check(3));
         assert!(rep.check(n));
-        assert!(!rep.check(n+1));
+        assert!(!rep.check(n + 1));
     }
 
     #[test]

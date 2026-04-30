@@ -3,5 +3,5 @@
 pub mod bits;
 pub mod repetition;
 
-pub use repetition::*;
 pub use bits::*;
+pub use repetition::*;

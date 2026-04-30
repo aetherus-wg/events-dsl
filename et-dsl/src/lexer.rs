@@ -177,7 +177,6 @@ pub fn lexer<'src>(dict: &HashSet<String>
         .collect()
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -462,5 +461,4 @@ mod tests {
         assert_eq!(Token::Ledger.to_string(), "ledger");
         assert_eq!(Token::Signals.to_string(), "signals");
     }
-
 }

@@ -447,7 +447,12 @@ impl<'src> Expr<'src> {
                     .collect::<Result<_, _>>()?;
                 Match::Any(bits_match).optimise()
             }
-            _ => return Err(Error::Unspanned(format!("Unexpected expression type for resolving SrcId: {:?}", self))),
+            _ => {
+                return Err(Error::Unspanned(format!(
+                    "Unexpected expression type for resolving SrcId: {:?}",
+                    self
+                )));
+            }
         })
     }
 
@@ -523,7 +528,12 @@ impl<'src> Expr<'src> {
                     ).with_span(*span));
                 }
             }
-            _ => return Err(Error::Unspanned(format!("Unexpected expression type for resolving sequence: {:?}", self))),
+            _ => {
+                return Err(Error::Unspanned(format!(
+                    "Unexpected expression type for resolving sequence: {:?}",
+                    self
+                )));
+            }
         })
     }
 
@@ -549,9 +559,11 @@ impl<'src> Expr<'src> {
                 if let RuleCond::Pattern(Predicate::Unit, pattern_match) = pred_pattern_match {
                     RuleCond::Pattern(Predicate::Repeat(repetition.clone()), pattern_match)
                 } else {
-                    return Err(Error::Unspanned(
-                        format!("Expected a pattern in repetition, found: {:?}", pattern)
-                    ).with_span(*span));
+                    return Err(Error::Unspanned(format!(
+                        "Expected a pattern in repetition, found: {:?}",
+                        pattern
+                    ))
+                    .with_span(*span));
                 }
             }
             Self::Any(exprs) => RuleCond::Pattern(
@@ -597,10 +609,19 @@ impl<'src> Expr<'src> {
                 if let RuleCond::Pattern(Predicate::Unit, pattern_match) = pred_pattern_match {
                     RuleCond::Pattern(Predicate::Not, pattern_match.optimise())
                 } else {
-                    return Err(Error::Unspanned(format!("Expected a pattern in negation, found: {:?}", pattern)).with_span(*span));
+                    return Err(Error::Unspanned(format!(
+                        "Expected a pattern in negation, found: {:?}",
+                        pattern
+                    ))
+                    .with_span(*span));
                 }
             }
-            _ => return Err(Error::Unspanned(format!("Unexpected expression type for resolving rule: {:?}", self))),
+            _ => {
+                return Err(Error::Unspanned(format!(
+                    "Unexpected expression type for resolving rule: {:?}",
+                    self
+                )));
+            }
         })
     }
 
@@ -615,7 +636,9 @@ impl<'src> Expr<'src> {
         Ok(match self {
             Self::Rule(conditions) => {
                 if conditions.is_empty() {
-                    return Err(Error::Unspanned(format!("Rule must have at least one condition")));
+                    return Err(Error::Unspanned(format!(
+                        "Rule must have at least one condition"
+                    )));
                 }
                 let resolved_conditions = conditions
                     .iter()
@@ -624,10 +647,15 @@ impl<'src> Expr<'src> {
                             .resolve_rule_cond(src_dict, trie, resolved_src, resolved_pattern, resolved_seq)
                             .map_err(|err| err.with_span(*span))
                     )
-                    .collect::<Result<_,_>>()?;
+                    .collect::<Result<_, _>>()?;
                 Rule(resolved_conditions)
             }
-            _ => return Err(Error::Unspanned(format!("Unexpected expression type for resolving rule: {:?}", self))),
+            _ => {
+                return Err(Error::Unspanned(format!(
+                    "Unexpected expression type for resolving rule: {:?}",
+                    self
+                )));
+            }
         })
     }
 }
@@ -765,7 +793,6 @@ mod tests {
         }
     }
 
-
     // Test SeqTree optimisations
     #[test]
     fn test_seqtree_optimise_flatten_nested_seq() {
@@ -779,14 +806,20 @@ mod tests {
         };
         let tree = SeqTree::Seq(vec![
             SeqTree::Pattern(Predicate::Unit, Match::Bits(bm1)),
-            SeqTree::Seq(vec![SeqTree::Pattern(Predicate::Unit, Match::Bits(bm2.clone()))]),
+            SeqTree::Seq(vec![SeqTree::Pattern(
+                Predicate::Unit,
+                Match::Bits(bm2.clone()),
+            )]),
         ]);
 
         let optimised = tree.optimise();
 
         if let SeqTree::Seq(items) = optimised {
             assert_eq!(items.len(), 2);
-            assert!(matches!(items[1], SeqTree::Pattern(Predicate::Unit, Match::Bits(_))));
+            assert!(matches!(
+                items[1],
+                SeqTree::Pattern(Predicate::Unit, Match::Bits(_))
+            ));
         } else {
             panic!("Expected Seq after optimisation");
         }
@@ -862,5 +895,4 @@ mod tests {
         dict.insert(SrcName::Light("laser".to_string()), DomainSrcId::Light(0));
         dict
     }
-
 }

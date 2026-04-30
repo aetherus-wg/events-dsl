@@ -248,7 +248,9 @@ pub fn find_uids_with_rule(ledger: &Ledger, rule: &Rule) -> Result<Vec<Uid>> {
                         seq,
                     };
                 } else {
-                    return Err(anyhow::anyhow!("Expected a sequence condition for bifurcation"));
+                    return Err(anyhow::anyhow!(
+                        "Expected a sequence condition for bifurcation"
+                    ));
                 }
 
                 if rule.cond_idx == 0 {

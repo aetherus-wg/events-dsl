@@ -19,3 +19,7 @@ regex.workspace = true
 
 [lints]
 workspace = true
+
+[[bin]]
+name = "et-encoding"
+path = "src/main.rs"

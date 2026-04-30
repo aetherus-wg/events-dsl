@@ -41,14 +41,14 @@
 pub mod ast;
 pub mod error;
 pub mod evaluate;
+pub mod lexer;
 pub mod model;
 pub mod parse;
-pub mod lexer;
 
 use crate::{
     ast::{Declaration, Expr},
-    parse::expr_parser,
     lexer::lexer,
+    parse::expr_parser,
 };
 use ariadne::{Color, Label, Report, ReportKind, sources};
 use chumsky::{Parser, error::Rich, input::Input, span::SimpleSpan};

@@ -234,7 +234,8 @@ where
             .ignore_then(seq_items)
             .then_ignore(just(Token::Ctrl(']')))
             .map_with(|items, e| (Expr::Seq(items), e.span()))
-    }).labelled("sequence construction");
+    })
+    .labelled("sequence construction");
 
     let decl_ledger = just(Token::Ledger)
         .ignore_then(just(Token::Ctrl('=')))
@@ -339,8 +340,8 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashSet;
     use crate::lexer;
+    use std::collections::HashSet;
 
     fn default_dict() -> HashSet<String> {
         let mut dict = HashSet::new();
