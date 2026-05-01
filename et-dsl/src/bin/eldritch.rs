@@ -41,6 +41,9 @@ struct Args {
     /// Verbosity level for logging (e.g., "info", "debug", "error")
     #[arg(short, long, default_value = "info")]
     verbose: String,
+    /// Dry run without evaluating rules (for testing parsing and resolution)
+    #[arg(long, default_value_t = false)]
+    dry: bool,
     /// Path to the DSL script file
     script: String,
 }
@@ -107,7 +110,7 @@ fn main() -> Result<()> {
     let ledger_path = if let Some(filepath) = args.ledger {
         PathBuf::from(filepath)
     } else {
-        extract_ledger_path(&declarations, script_src, script_filepath).unwrap()
+        extract_ledger_path(&declarations, script_src, script_filepath).unwrap_or_else(|| panic!("Failed to extract ledger from: {}", script_filepath.display()))
     };
     let signals_path = if let Some(filepath) = args.signals {
         Some(PathBuf::from(filepath))
@@ -186,6 +189,11 @@ fn main() -> Result<()> {
         ));
         let graphviz_dot = ledger.emit_dot_with_freq(uids_top.keys(), &uids_top);
         std::fs::write(&dot_file, graphviz_dot).context("Failed to write DOT file")?;
+    }
+
+    if args.dry {
+        info!("Dry run enabled, skipping rule evaluation");
+        return Ok(());
     }
 
     // 7. Evaluate each rule on the ledger and emit a DOT graph visualizing the UIDs that match the rule
